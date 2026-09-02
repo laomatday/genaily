@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { StatusBadge } from '../../components/DesignSystem';
-import { ExceptionItem } from '../../types';
+import { PWAInstallButton } from '../../components/PWAInstallButton';
+import { OfflineIndicator } from '../../components/OfflineIndicator';
 
 interface ParentDashboardProps {
   sessionStatus: string;
@@ -24,13 +25,18 @@ export function ParentDashboard({ sessionStatus, onApprove, onSwitchToChild }: P
         <div className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-5">
             <div className="flex items-center gap-2.5">
-              <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-[#243C8F] via-[#3F64E8] to-[#19B7A5] flex items-center justify-center text-white font-black shadow-lg">g</div>
+              <div className="w-10 h-10 rounded-2xl bg-white border border-[#E9EDF4] flex items-center justify-center shadow-sm overflow-hidden p-1">
+                <img src="https://lh3.googleusercontent.com/d/1TTJ-7BMnAa6nMfNrMI1DavN64l2Y3VOP" alt="Logo" className="w-full h-full object-contain" style={{ transform: 'scale(0.67)' }} />
+              </div>
               <div>
                 <b className="text-base">genAi Family</b>
                 <small className="block text-[#7B8496] text-[11px]">Learning Autopilot</small>
               </div>
             </div>
-            <button onClick={onSwitchToChild} className="w-10 h-10 rounded-2xl bg-[#EAF2FF] text-[#243C8F] font-bold text-sm flex items-center justify-center shadow-sm">P</button>
+            <div className="flex items-center gap-2">
+              <PWAInstallButton />
+              <button onClick={onSwitchToChild} className="w-10 h-10 rounded-2xl bg-[#EAF2FF] text-[#243C8F] font-bold text-sm flex items-center justify-center shadow-sm" title="Switch to Child Mode">P</button>
+            </div>
           </div>
 
           <h1 className="text-3xl font-extrabold tracking-tight mb-2">
@@ -401,6 +407,8 @@ export function ParentDashboard({ sessionStatus, onApprove, onSwitchToChild }: P
           <span className="text-lg">!</span>Ngoại lệ
         </button>
       </div>
+
+      <OfflineIndicator />
 
       {/* APPROVAL SHEET MODAL */}
       {approvalSheetOpen && (

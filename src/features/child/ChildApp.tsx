@@ -1,4 +1,6 @@
 import React, { useState, useEffect } from 'react';
+import { PWAInstallButton } from '../../components/PWAInstallButton';
+import { OfflineIndicator } from '../../components/OfflineIndicator';
 
 interface ChildAppProps {
   sessionStatus: string;
@@ -37,11 +39,19 @@ export function ChildApp({ sessionStatus, onSubmitSession, onSwitchToParent }: C
       {subView === 'home' && (
         <div className="p-4 sm:p-5">
           <div className="flex items-center justify-between mb-5">
-            <div>
-              <div className="text-[11px] uppercase tracking-wider text-[#8A92A2] font-extrabold">Thứ Tư · 2/9</div>
-              <b className="text-xl">Chào Pen 👋</b>
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center shadow-sm overflow-hidden p-1">
+                <img src="https://lh3.googleusercontent.com/d/1TTJ-7BMnAa6nMfNrMI1DavN64l2Y3VOP" alt="Logo" className="w-full h-full object-contain" style={{ transform: 'scale(0.67)' }} />
+              </div>
+              <div>
+                <div className="text-[11px] uppercase tracking-wider text-[#8A92A2] font-extrabold">Thứ Tư · 2/9</div>
+                <b className="text-xl">Chào Pen 👋</b>
+              </div>
             </div>
-            <button onClick={onSwitchToParent} className="w-10 h-10 rounded-2xl bg-[#243C8F] text-white font-bold text-sm flex items-center justify-center shadow-md">P</button>
+            <div className="flex items-center gap-2">
+              <PWAInstallButton />
+              <button onClick={onSwitchToParent} className="w-10 h-10 rounded-2xl bg-[#243C8F] text-white font-bold text-sm flex items-center justify-center shadow-md" title="Switch to Parent Mode">P</button>
+            </div>
           </div>
 
           <div className="p-5 rounded-[26px] bg-gradient-to-br from-[#1E2536] to-[#151A24] border border-[#2B354D] mb-6 shadow-xl">
@@ -301,6 +311,8 @@ export function ChildApp({ sessionStatus, onSubmitSession, onSwitchToParent }: C
           <button onClick={() => setSubView('home')} className="w-full py-4 rounded-2xl bg-[#151A24] text-white font-black text-sm shadow-xl">Về Hôm nay</button>
         </div>
       )}
+
+      <OfflineIndicator />
     </div>
   );
 }
