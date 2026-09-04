@@ -7,37 +7,52 @@ import { chromium } from '@playwright/test';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const configPath = join(projectRoot, 'assets/app-icons.config.json');
-const glyphPath = join(projectRoot, 'assets/app-icon-glyph.svg');
 const generatorPath = fileURLToPath(import.meta.url);
-const [configSource, glyphSource, generatorSource] = await Promise.all([
-  readFile(configPath, 'utf8'),
-  readFile(glyphPath, 'utf8'),
+const configSource = await readFile(configPath, 'utf8');
+const config = JSON.parse(configSource);
+const sourcePath = join(projectRoot, config.source.file);
+const [sourcePng, generatorSource] = await Promise.all([
+  readFile(sourcePath),
   readFile(generatorPath, 'utf8'),
 ]);
-const config = JSON.parse(configSource);
-const artworkScale = config.artworkScale.numerator / config.artworkScale.denominator;
-const artworkScaleText = artworkScale.toString();
-const glyphMarkup = glyphSource.match(/<g id="app-icon-glyph">([\s\S]*?)<\/g>/)?.[1]?.trim();
-if (!glyphMarkup) throw new Error('Không đọc được artwork từ assets/app-icon-glyph.svg.');
 
-function iconSvg({ rounded, includeBackground = true }) {
+function sha256(buffer) {
+  return createHash('sha256').update(buffer).digest('hex');
+}
+
+const sourceSha256 = sha256(sourcePng);
+if (sourceSha256 !== config.source.sha256) {
+  throw new Error(`Logo nguồn sai SHA-256: ${sourceSha256}. Không sinh derivative từ file đã bị thay đổi.`);
+}
+if (config.artworkScale.numerator !== 2 || config.artworkScale.denominator !== 3) {
+  throw new Error('Artwork app icon phải được scale đúng 2/3 theo yêu cầu thiết kế.');
+}
+
+const artworkScale = config.artworkScale.numerator / config.artworkScale.denominator;
+const sourceDataUrl = `data:image/png;base64,${sourcePng.toString('base64')}`;
+
+function iconSvg({ rounded, includeBackground }) {
   const background = includeBackground
     ? `<rect width="${config.canvasSize}" height="${config.canvasSize}"${rounded ? ` rx="${config.cornerRadius}"` : ''} fill="${config.colors.background}"/>`
     : '';
   return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${config.canvasSize} ${config.canvasSize}" width="${config.canvasSize}" height="${config.canvasSize}" data-artwork-scale="${config.artworkScale.numerator}/${config.artworkScale.denominator}">
   <title>genAi Family</title>
   ${background}
-  <g transform="translate(${config.canvasCenter} ${config.canvasCenter}) scale(${artworkScaleText}) translate(-${config.canvasCenter} -${config.canvasCenter})">
-    ${glyphMarkup}
+  <g transform="translate(${config.canvasCenter} ${config.canvasCenter}) scale(${artworkScale}) translate(-${config.canvasCenter} -${config.canvasCenter})">
+    <image x="0" y="0" width="${config.canvasSize}" height="${config.canvasSize}" preserveAspectRatio="xMidYMid meet" href="${sourceDataUrl}"/>
   </g>
 </svg>
 `;
 }
 
-async function writeText(relativePath, contents) {
+async function writeBinary(relativePath, contents) {
   const destination = join(projectRoot, relativePath);
   await mkdir(dirname(destination), { recursive: true });
   await writeFile(destination, contents);
+}
+
+async function writeText(relativePath, contents) {
+  await writeBinary(relativePath, Buffer.from(contents));
 }
 
 function crcTable() {
@@ -119,58 +134,18 @@ async function renderRgba(page, svg, size) {
   return Buffer.from(encoded, 'base64');
 }
 
-function attribute(markup, name) {
-  return markup.match(new RegExp(`${name}="([^"]+)"`))?.[1];
-}
-
-const androidColorResources = new Map([
-  [config.colors.foregroundPrimary.toLowerCase(), '@color/app_icon_foreground_primary'],
-  [config.colors.foregroundSecondary.toLowerCase(), '@color/app_icon_foreground_secondary'],
-]);
-
-function androidColorResource(color) {
-  const resource = androidColorResources.get(color.toLowerCase());
-  if (!resource) {
-    throw new Error(`Màu ${color} trong glyph chưa có Android color resource tương ứng.`);
+function monochromeRgba(rgba, color) {
+  const match = /^#([0-9a-f]{6})$/i.exec(color);
+  if (!match) throw new Error(`Màu monochrome không hợp lệ: ${color}`);
+  const rgb = [0, 2, 4].map((offset) => Number.parseInt(match[1].slice(offset, offset + 2), 16));
+  const result = Buffer.alloc(rgba.length);
+  for (let offset = 0; offset < rgba.length; offset += 4) {
+    result[offset] = rgb[0];
+    result[offset + 1] = rgb[1];
+    result[offset + 2] = rgb[2];
+    result[offset + 3] = rgba[offset + 3];
   }
-  return resource;
-}
-
-function androidPaths(monochrome = false) {
-  const elements = [...glyphMarkup.matchAll(/<(circle|path)\s+([^>]+)\/>/g)];
-  return elements.map(([, type, attributes]) => {
-    const originalFill = attribute(attributes, 'fill') ?? config.colors.foregroundPrimary;
-    const fill = monochrome
-      ? '@color/app_icon_foreground_primary'
-      : androidColorResource(originalFill);
-    const opacity = monochrome ? undefined : attribute(attributes, 'opacity');
-    let pathData = attribute(attributes, 'd');
-    if (type === 'circle') {
-      const cx = Number(attribute(attributes, 'cx'));
-      const cy = Number(attribute(attributes, 'cy'));
-      const radius = Number(attribute(attributes, 'r'));
-      pathData = `M${cx + radius},${cy} A${radius},${radius} 0 1,0 ${cx - radius},${cy} A${radius},${radius} 0 1,0 ${cx + radius},${cy} Z`;
-    }
-    return `        <path android:fillColor="${fill}"${opacity ? ` android:fillAlpha="${opacity}"` : ''} android:pathData="${pathData}" />`;
-  }).join('\n');
-}
-
-function androidVector(monochrome = false) {
-  return `<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="${config.canvasSize}"
-    android:viewportHeight="${config.canvasSize}">
-    <group
-        android:pivotX="${config.canvasCenter}"
-        android:pivotY="${config.canvasCenter}"
-        android:scaleX="${artworkScaleText}"
-        android:scaleY="${artworkScaleText}">
-${androidPaths(monochrome)}
-    </group>
-</vector>
-`;
+  return result;
 }
 
 function adaptiveIcon(includeMonochrome = false) {
@@ -179,6 +154,16 @@ function adaptiveIcon(includeMonochrome = false) {
     <background android:drawable="@color/app_icon_background" />
     <foreground android:drawable="@drawable/ic_launcher_foreground" />${includeMonochrome ? '\n    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />' : ''}
 </adaptive-icon>
+`;
+}
+
+function bitmapDrawable(drawableName) {
+  return `<?xml version="1.0" encoding="utf-8"?>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/${drawableName}"
+    android:antialias="true"
+    android:filter="true"
+    android:gravity="fill" />
 `;
 }
 
@@ -194,17 +179,17 @@ const iosSlots = [
   ['ipad', '83.5x83.5', '2x', 167], ['ios-marketing', '1024x1024', '1x', 1024],
 ];
 
-const pwaDirectory = config.outputs.pwaDirectory;
-const iosDirectory = config.outputs.iosAppIconSet;
 const androidDirectory = config.outputs.androidResources;
-const roundedSvg = iconSvg({ rounded: true });
-const squareSvg = iconSvg({ rounded: false });
+const iosDirectory = config.outputs.iosAppIconSet;
+const roundedSvg = iconSvg({ rounded: true, includeBackground: true });
+const squareSvg = iconSvg({ rounded: false, includeBackground: true });
+const transparentSvg = iconSvg({ rounded: false, includeBackground: false });
+
 await Promise.all([
-  writeText(`${pwaDirectory}/app-icon-any.svg`, roundedSvg),
-  writeText(`${pwaDirectory}/app-icon-maskable.svg`, squareSvg),
-  writeText(`${androidDirectory}/values/app_icon_colors.xml`, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="app_icon_background">${config.colors.background}</color>\n    <color name="app_icon_foreground_primary">${config.colors.foregroundPrimary}</color>\n    <color name="app_icon_foreground_secondary">${config.colors.foregroundSecondary}</color>\n</resources>\n`),
-  writeText(`${androidDirectory}/drawable/ic_launcher_foreground.xml`, androidVector()),
-  writeText(`${androidDirectory}/drawable/ic_launcher_monochrome.xml`, androidVector(true)),
+  writeBinary(config.source.publicFile, sourcePng),
+  writeText(`${androidDirectory}/values/app_icon_colors.xml`, `<?xml version="1.0" encoding="utf-8"?>\n<resources>\n    <color name="app_icon_background">${config.colors.background}</color>\n</resources>\n`),
+  writeText(`${androidDirectory}/drawable/ic_launcher_foreground.xml`, bitmapDrawable('app_icon_foreground_artwork')),
+  writeText(`${androidDirectory}/drawable/ic_launcher_monochrome.xml`, bitmapDrawable('app_icon_monochrome_mask')),
   writeText(`${androidDirectory}/mipmap-anydpi-v26/ic_launcher.xml`, adaptiveIcon()),
   writeText(`${androidDirectory}/mipmap-anydpi-v26/ic_launcher_round.xml`, adaptiveIcon()),
   writeText(`${androidDirectory}/mipmap-anydpi-v33/ic_launcher.xml`, adaptiveIcon(true)),
@@ -213,38 +198,78 @@ await Promise.all([
 
 const browser = await chromium.launch({ headless: true });
 const generatedPngs = [];
+
+async function writeGeneratedPng(relativePath, png, size, colorType, role) {
+  await writeBinary(relativePath, png);
+  generatedPngs.push({
+    path: relativePath,
+    width: size,
+    height: size,
+    colorType,
+    role,
+    sha256: sha256(png),
+  });
+}
+
 try {
   const page = await browser.newPage();
-  const roundedSizes = [192, 512];
-  for (const size of roundedSizes) {
-    const rgba = await renderRgba(page, roundedSvg, size);
-    const relativePath = `${pwaDirectory}/app-icon-any-${size}.png`;
-    await writeFile(join(projectRoot, relativePath), encodePng(rgba, size, true));
-    generatedPngs.push({ path: relativePath, width: size, height: size, colorType: 6 });
+
+  for (const icon of config.pwaManifestIcons) {
+    if (icon.type !== 'image/png' || !/^\d+x\d+$/.test(icon.sizes)) {
+      throw new Error(`PWA icon không được hỗ trợ: ${JSON.stringify(icon)}`);
+    }
+    const [width, height] = icon.sizes.split('x').map(Number);
+    if (width !== height) throw new Error(`PWA icon phải vuông: ${icon.src}`);
+    const isMaskable = icon.purpose.split(/\s+/).includes('maskable');
+    const rgba = await renderRgba(page, isMaskable ? squareSvg : roundedSvg, width);
+    const png = encodePng(rgba, width, !isMaskable);
+    await writeGeneratedPng(
+      join('public', icon.src.replace(/^\//, '')),
+      png,
+      width,
+      isMaskable ? 2 : 6,
+      isMaskable ? 'pwa-maskable' : 'pwa-any',
+    );
   }
 
-  const squareSizes = new Set([192, 512, 180, ...iosSlots.map((slot) => slot[3])]);
-  const squarePngBySize = new Map();
-  for (const size of squareSizes) {
+  const faviconRgba = await renderRgba(page, roundedSvg, config.web.faviconSize);
+  await writeGeneratedPng(
+    join('public', config.web.favicon.replace(/^\//, '')),
+    encodePng(faviconRgba, config.web.faviconSize, true),
+    config.web.faviconSize,
+    6,
+    'favicon',
+  );
+
+  const appleTouchRgba = await renderRgba(page, squareSvg, config.web.appleTouchIconSize);
+  await writeGeneratedPng(
+    join('public', config.web.appleTouchIcon.replace(/^\//, '')),
+    encodePng(appleTouchRgba, config.web.appleTouchIconSize, false),
+    config.web.appleTouchIconSize,
+    2,
+    'apple-touch-icon',
+  );
+
+  const foregroundRgba = await renderRgba(page, transparentSvg, config.canvasSize);
+  await writeGeneratedPng(
+    `${androidDirectory}/drawable-nodpi/app_icon_foreground_artwork.png`,
+    encodePng(foregroundRgba, config.canvasSize, true),
+    config.canvasSize,
+    6,
+    'android-adaptive-foreground',
+  );
+  await writeGeneratedPng(
+    `${androidDirectory}/drawable-nodpi/app_icon_monochrome_mask.png`,
+    encodePng(monochromeRgba(foregroundRgba, config.colors.monochrome), config.canvasSize, true),
+    config.canvasSize,
+    6,
+    'android-monochrome-mask',
+  );
+
+  for (const size of new Set(iosSlots.map((slot) => slot[3]))) {
     const rgba = await renderRgba(page, squareSvg, size);
-    squarePngBySize.set(size, encodePng(rgba, size, false));
-  }
-
-  for (const size of [192, 512]) {
-    const relativePath = `${pwaDirectory}/app-icon-maskable-${size}.png`;
-    await writeFile(join(projectRoot, relativePath), squarePngBySize.get(size));
-    generatedPngs.push({ path: relativePath, width: size, height: size, colorType: 2 });
-  }
-  const appleTouchPath = `${pwaDirectory}/apple-touch-icon-180.png`;
-  await writeFile(join(projectRoot, appleTouchPath), squarePngBySize.get(180));
-  generatedPngs.push({ path: appleTouchPath, width: 180, height: 180, colorType: 2 });
-
-  for (const size of squareSizes) {
-    if (!iosSlots.some((slot) => slot[3] === size)) continue;
     const relativePath = `${iosDirectory}/AppIcon-${size}.png`;
-    await mkdir(dirname(join(projectRoot, relativePath)), { recursive: true });
-    await writeFile(join(projectRoot, relativePath), squarePngBySize.get(size));
-    generatedPngs.push({ path: relativePath, width: size, height: size, colorType: 2 });
+    await writeGeneratedPng(relativePath, encodePng(rgba, size, false), size, 2, 'ios-app-icon');
   }
 } finally {
   await browser.close();
@@ -260,13 +285,18 @@ await writeText(`${iosDirectory}/Contents.json`, `${JSON.stringify(iosContents, 
 
 const inputHash = createHash('sha256')
   .update(configSource)
-  .update(glyphSource)
+  .update(sourcePng)
   .update(generatorSource)
   .digest('hex');
 await writeText('assets/app-icons.generated.json', `${JSON.stringify({
   inputHash,
+  source: {
+    file: config.source.file,
+    publicFile: config.source.publicFile,
+    sha256: sourceSha256,
+  },
   artworkScale: `${config.artworkScale.numerator}/${config.artworkScale.denominator}`,
   pngs: generatedPngs.sort((left, right) => left.path.localeCompare(right.path)),
 }, null, 2)}\n`);
 
-console.log(`Generated ${generatedPngs.length} PNG app-icon assets at artwork scale ${config.artworkScale.numerator}/${config.artworkScale.denominator}.`);
+console.log(`Generated ${generatedPngs.length} PNG app-icon assets from the exact source at artwork scale ${config.artworkScale.numerator}/${config.artworkScale.denominator}.`);

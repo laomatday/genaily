@@ -1,4 +1,10 @@
 {
+  "source": {
+    "file": "assets/app-logo-source.png",
+    "sha256": "730bc4ad1bc0f5134dc70db30a33cbdc55a67ff00168a533b992cd618cdba395",
+    "publicFile": "public/brand/genaily-mark-v1.png",
+    "publicUrl": "/brand/genaily-mark-v1.png"
+  },
   "canvasSize": 512,
   "canvasCenter": 256,
   "cornerRadius": 120,
@@ -7,14 +13,24 @@
     "denominator": 3
   },
   "colors": {
-    "background": "#243c8f",
-    "foregroundPrimary": "#ffffff",
-    "foregroundSecondary": "#e8f8f4"
+    "background": "#f7f9fc",
+    "monochrome": "#ffffff"
   },
   "outputs": {
     "pwaDirectory": "public/icons",
     "androidResources": "mobile/android/app/src/main/res",
     "iosAppIconSet": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset"
+  },
+  "web": {
+    "favicon": "/icons/favicon-64.png",
+    "faviconSize": 64,
+    "appleTouchIcon": "/icons/apple-touch-icon-180.png",
+    "appleTouchIconSize": 180,
+    "includeAssets": [
+      "brand/genaily-mark-v1.png",
+      "icons/favicon-64.png",
+      "icons/apple-touch-icon-180.png"
+    ]
   },
   "pwaManifestIcons": [
     {
@@ -30,12 +46,6 @@
       "purpose": "any"
     },
     {
-      "src": "/icons/app-icon-any.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
       "src": "/icons/app-icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
@@ -45,12 +55,6 @@
       "src": "/icons/app-icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
-      "purpose": "maskable"
-    },
-    {
-      "src": "/icons/app-icon-maskable.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
       "purpose": "maskable"
     }
   ]

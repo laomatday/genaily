@@ -1551,6 +1551,7 @@
 :root {
   --app-background: #f7f9fc;
   --app-surface: #ffffff;
+  --app-logo-surface: #f7f9fc;
   --app-surface-subtle: #f8f9fc;
   --app-surface-muted: #f0f3f7;
   --app-text: #151a24;
@@ -1597,6 +1598,7 @@
 :root[data-theme="dark"] {
   --app-background: #111827;
   --app-surface: #182235;
+  --app-logo-surface: #f7f9fc;
   --app-surface-subtle: #1b2639;
   --app-surface-muted: #222f45;
   --app-text: #f5f7fb;
@@ -2484,6 +2486,26 @@ textarea::placeholder {
   display: grid;
   justify-items: center;
   gap: 0.75rem;
+}
+
+.app-logo-frame {
+  --app-logo-artwork-size: 66.6667%;
+
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: 1px solid var(--app-border);
+  border-radius: var(--radius-2xl);
+  background: var(--app-logo-surface);
+  box-shadow: 0 1px 3px var(--app-shadow-color);
+}
+
+.app-logo-image {
+  width: var(--app-logo-artwork-size);
+  height: var(--app-logo-artwork-size);
+  object-fit: contain;
 }
 
 .app-loading-logo {

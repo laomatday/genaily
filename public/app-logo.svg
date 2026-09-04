@@ -1,8 +1,0 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title">
-  <title id="title">genAi Family</title>
-  <rect width="512" height="512" rx="120" fill="#243c8f"/>
-  <circle cx="190" cy="202" r="72" fill="#ffffff" opacity=".96"/>
-  <circle cx="338" cy="226" r="58" fill="#e8f8f4"/>
-  <path d="M82 414c8-91 49-137 123-137s114 46 122 137H82Z" fill="#ffffff" opacity=".96"/>
-  <path d="M269 414c7-73 39-110 96-110s89 37 96 110H269Z" fill="#e8f8f4"/>
-</svg>

@@ -1,16 +1,24 @@
+import { useState } from 'react';
+import { BRAND_ASSETS, BRAND_LOGO_URL } from '../config/brandAssets';
+
 interface AppLogoProps {
   className?: string;
-  size?: string;
 }
 
-export function AppLogo({ className = "w-10 h-10", size = "w-2/3 h-2/3" }: AppLogoProps) {
+export function AppLogo({ className = 'w-10 h-10' }: AppLogoProps) {
+  const [useLocalLogo, setUseLocalLogo] = useState(
+    BRAND_LOGO_URL === BRAND_ASSETS.localLogoUrl,
+  );
+  const logoUrl = useLocalLogo ? BRAND_ASSETS.localLogoUrl : BRAND_LOGO_URL;
+
   return (
-    <div className={`relative flex items-center justify-center rounded-2xl app-primary-bg shadow-sm overflow-hidden ${className}`}>
+    <div className={`app-logo-frame ${className}`}>
       <img
-        src="/app-logo.svg"
-        alt="genAi Family Logo"
-        className={`${size} object-contain transition-transform duration-300 hover:scale-105`}
+        src={logoUrl}
+        alt="Logo genAi Family"
+        className="app-logo-image"
         referrerPolicy="no-referrer"
+        onError={useLocalLogo ? undefined : () => setUseLocalLogo(true)}
       />
     </div>
   );

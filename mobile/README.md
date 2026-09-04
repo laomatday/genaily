@@ -65,9 +65,15 @@ không thể cài và kiểm thử trên thiết bị thật.
 
 ## Tái tạo app icon
 
-Artwork gốc nằm trong `assets/app-icon-glyph.svg`; canvas, màu, đầu ra và tỷ lệ
-artwork `2/3` được khai báo một lần tại `assets/app-icons.config.json`. Không sửa
-trực tiếp các PNG, Android vector hay iOS AppIcon đã sinh.
+Logo canonical nằm trong `assets/app-logo-source.png`. Generator kiểm tra
+SHA-256 trước khi chạy, rồi copy nguyên byte (không scale, không recompress) sang
+`public/brand/genaily-mark-v1.png` để làm fallback offline. Canvas, màu nền, đầu
+ra và tỷ lệ artwork `2/3` được khai báo một lần tại
+`assets/app-icons.config.json`; Vite PWA precache bản fallback cùng favicon.
+
+Không sửa trực tiếp các PNG đã sinh. PWA có asset `any` và `maskable` riêng;
+Android dùng adaptive icon với raster foreground cùng alpha mask monochrome;
+iOS và Apple Touch được xuất RGB không alpha trên nền trung tính.
 
 ```bash
 npx playwright install chromium
@@ -75,7 +81,7 @@ npm run generate:icons
 npm run check:icons
 ```
 
-Script dùng Chromium của Playwright để rasterize SVG, sau đó encoder PNG dùng
-`node:zlib` tạo file deterministic. Icon iOS và Apple Touch được xuất RGB không
-alpha; PWA có asset `any` và `maskable` riêng; Android dùng adaptive icon và màu
-từ `values/app_icon_colors.xml`.
+Script dùng Chromium của Playwright để rasterize logo ở đúng một lần scale
+`2/3`, sau đó encoder PNG dùng `node:zlib` tạo file deterministic. Metadata lưu
+SHA-256 của từng derivative để `npm run check:icons` phát hiện file bị sửa tay,
+scale lặp hoặc asset nguồn không còn nguyên vẹn.

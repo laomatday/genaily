@@ -1,17 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="512"
-    android:viewportHeight="512">
-    <group
-        android:pivotX="256"
-        android:pivotY="256"
-        android:scaleX="0.6666666666666666"
-        android:scaleY="0.6666666666666666">
-        <path android:fillColor="@color/app_icon_foreground_primary" android:fillAlpha=".96" android:pathData="M262,202 A72,72 0 1,0 118,202 A72,72 0 1,0 262,202 Z" />
-        <path android:fillColor="@color/app_icon_foreground_secondary" android:pathData="M396,226 A58,58 0 1,0 280,226 A58,58 0 1,0 396,226 Z" />
-        <path android:fillColor="@color/app_icon_foreground_primary" android:fillAlpha=".96" android:pathData="M82 414c8-91 49-137 123-137s114 46 122 137H82Z" />
-        <path android:fillColor="@color/app_icon_foreground_secondary" android:pathData="M269 414c7-73 39-110 96-110s89 37 96 110H269Z" />
-    </group>
-</vector>
+<bitmap xmlns:android="http://schemas.android.com/apk/res/android"
+    android:src="@drawable/app_icon_foreground_artwork"
+    android:antialias="true"
+    android:filter="true"
+    android:gravity="fill" />

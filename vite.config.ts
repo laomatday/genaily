@@ -17,6 +17,7 @@ export default defineConfig(() => {
       react(),
       VitePWA({
         registerType: 'autoUpdate',
+        includeAssets: iconConfig.web.includeAssets,
         manifest: {
           id: '/',
           name: APP_BRAND.name,
