@@ -80,7 +80,7 @@ migration, unit/integration tests, production build và bundle budget. Test E2E
 đăng nhập có mutation chỉ chạy khi đặt `E2E_ALLOW_DATA_MUTATION=true` cùng bộ
 biến E2E; script seed từ chối project từ xa nếu chưa cho phép rõ ràng.
 
-CI còn reset database sạch, chạy 99 assertion pgTAP/RLS và bảy luồng E2E quan
+CI còn reset database sạch, chạy 104 assertion pgTAP/RLS và tám luồng E2E quan
 trọng: onboarding lần đầu, lưu lịch, đổi bé, đồng bộ nhiều tab, phần thưởng,
 Parent Gate và Study Lock.
 

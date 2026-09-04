@@ -85,6 +85,8 @@ test.describe('production flows on a reset test account', () => {
   test('changing children ends on the latest requested profile', async ({ page }) => {
     test.skip(!secondaryChild, 'Set E2E_SECOND_CHILD_NAME to exercise multi-child switching.');
     await selectChild(page, secondaryChild!);
+    await page.reload();
+    await expect(page.getByRole('button', { name: `Quản lý hồ sơ của ${secondaryChild}` })).toBeVisible();
     await selectChild(page, primaryChild!);
     await expect(page.getByRole('button', { name: `Quản lý hồ sơ của ${primaryChild}` })).toBeVisible();
   });

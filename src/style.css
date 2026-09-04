@@ -5288,6 +5288,38 @@ textarea::placeholder {
   padding-inline: 1rem;
 }
 
+.pairing-code-card.is-expired {
+  border-color: var(--app-orange-border);
+  background: var(--app-orange-soft);
+  color: var(--app-orange-text);
+}
+
+.device-pending-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+  border: 1px solid var(--app-blue-border);
+  border-radius: 1rem;
+  background: var(--app-blue-soft);
+  padding: 0.75rem;
+  color: var(--app-blue-text);
+  font-size: 0.72rem;
+  line-height: 1.45;
+}
+
+.device-pending-note.is-expired {
+  border-color: var(--app-orange-border);
+  background: var(--app-orange-soft);
+  color: var(--app-orange-text);
+}
+
+.device-pending-note .material-symbol-icon {
+  margin-top: 0.08rem;
+  flex: 0 0 auto;
+  font-size: 1.1rem;
+}
+
 .device-pairing-steps {
   display: grid;
   gap: 0.45rem;

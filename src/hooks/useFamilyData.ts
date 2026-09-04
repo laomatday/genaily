@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import {
   applySmartWeek,
   approveLearningSession,
@@ -35,6 +35,12 @@ import {
 
 export type FamilyDataAccessScope = 'parent' | 'child';
 
+function dataTargetKey(context: FamilyContext | null, accessScope: FamilyDataAccessScope): string | null {
+  return context
+    ? `${context.familyId}:${context.childProfileId}:${accessScope}`
+    : null;
+}
+
 export function useFamilyData(context: FamilyContext | null, accessScope: FamilyDataAccessScope) {
   const [data, setData] = useState<FamilyData | null>(null);
   const [loadedAccessScope, setLoadedAccessScope] = useState<FamilyDataAccessScope | null>(null);
@@ -43,9 +49,17 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const requestGeneration = useRef(0);
+  const renderedTargetKey = dataTargetKey(context, accessScope);
+  const activeTargetKey = useRef(renderedTargetKey);
+  // Update at commit time before promise continuations can observe the newly
+  // selected child while the passive data-loading effect is still pending.
+  useLayoutEffect(() => {
+    activeTargetKey.current = renderedTargetKey;
+  }, [renderedTargetKey]);
 
   const refresh = useCallback(async () => {
     if (!context) {
+      if (activeTargetKey.current !== null) return;
       requestGeneration.current += 1;
       setData(null);
       setLoading(false);
@@ -53,19 +67,25 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
     }
     const target = context;
     const targetAccessScope = accessScope;
+    const targetKey = dataTargetKey(target, targetAccessScope);
+    // An old runMutation callback must not invalidate the request belonging to
+    // the child that is active now.
+    if (activeTargetKey.current !== targetKey) return;
     const generation = ++requestGeneration.current;
     try {
       const nextData = await loadFamilyData(target);
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current || activeTargetKey.current !== targetKey) return;
       setData(nextData);
       setLoadedAccessScope(targetAccessScope);
       setError(null);
     } catch (cause) {
-      if (generation !== requestGeneration.current) return;
+      if (generation !== requestGeneration.current || activeTargetKey.current !== targetKey) return;
       setError(cause instanceof Error ? cause.message : 'Không tải được dữ liệu Supabase.');
       setData((current) => current?.child.id === target.childProfileId ? current : null);
     } finally {
-      if (generation === requestGeneration.current) setLoading(false);
+      if (generation === requestGeneration.current && activeTargetKey.current === targetKey) {
+        setLoading(false);
+      }
     }
   }, [accessScope, context]);
 
@@ -80,6 +100,9 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
       return;
     }
     setLoading(true);
+    setSaving(false);
+    setLoadingMore(false);
+    setError(null);
     setData(null);
     void refresh();
     const unsubscribe = subscribeToChildChanges(context, () => void refresh());
@@ -122,20 +145,25 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
   }, [context, data, loadingMore]);
 
   const runMutation = useCallback(async <T,>(mutation: () => Promise<T>): Promise<T> => {
+    const mutationTargetKey = activeTargetKey.current;
     setSaving(true);
     try {
       const result = await mutation();
-      await refresh();
-      setError(null);
+      if (activeTargetKey.current === mutationTargetKey) {
+        await refresh();
+        if (activeTargetKey.current === mutationTargetKey) setError(null);
+      }
       return result;
     } catch (cause) {
       const message = cause instanceof Error ? cause.message : 'Không lưu được dữ liệu Supabase.';
-      setError(message);
-      await refresh();
-      setError(message);
+      if (activeTargetKey.current === mutationTargetKey) {
+        setError(message);
+        await refresh();
+        if (activeTargetKey.current === mutationTargetKey) setError(message);
+      }
       throw cause;
     } finally {
-      setSaving(false);
+      if (activeTargetKey.current === mutationTargetKey) setSaving(false);
     }
   }, [refresh]);
 

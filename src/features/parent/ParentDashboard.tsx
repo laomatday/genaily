@@ -123,6 +123,7 @@ export function ParentDashboard({
     return (
       <div className="app-shell min-h-screen app-background p-4 app-text-color sm:p-5">
         <ScheduleSetupPanel
+          key={data.child.id}
           data={data}
           saving={saving}
           error={error}
@@ -230,6 +231,7 @@ export function ParentDashboard({
       )}
       {devicesOpen && (
         <DeviceManagementDialog
+          key={data.child.id}
           data={data}
           saving={saving}
           onCreate={onCreateDevicePairing}

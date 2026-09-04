@@ -1,9 +1,9 @@
 // @vitest-environment jsdom
-import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FamilyContext } from '../lib/familyIdentity';
 import type { FamilyData } from '../lib/familyRepository';
-import { loadFamilyData, subscribeToChildChanges } from '../lib/familyRepository';
+import { loadFamilyData, saveScheduleSetup, subscribeToChildChanges } from '../lib/familyRepository';
 import { useFamilyData, type FamilyDataAccessScope } from './useFamilyData';
 
 vi.mock('../lib/familyRepository', () => ({
@@ -118,5 +118,57 @@ describe('useFamilyData child context isolation', () => {
 
     resolveChild(familyData(firstContext.childProfileId));
     await waitFor(() => expect(screen.getByText(firstContext.childProfileId)).toBeTruthy());
+  });
+
+  it('does not let a completed mutation for the previous child invalidate the active child request', async () => {
+    let resolveSave!: () => void;
+    let resolveSecondLoad!: (data: FamilyData) => void;
+    const pendingSave = new Promise<void>((resolve) => {
+      resolveSave = resolve;
+    });
+    const pendingSecondLoad = new Promise<FamilyData>((resolve) => {
+      resolveSecondLoad = resolve;
+    });
+    vi.mocked(loadFamilyData)
+      .mockResolvedValueOnce(familyData(firstContext.childProfileId))
+      .mockReturnValueOnce(pendingSecondLoad)
+      .mockResolvedValue(familyData(firstContext.childProfileId));
+    vi.mocked(saveScheduleSetup).mockReturnValueOnce(pendingSave);
+    vi.mocked(subscribeToChildChanges).mockReturnValue(vi.fn());
+
+    function Probe({ context }: { context: FamilyContext }) {
+      const state = useFamilyData(context, 'parent');
+      return (
+        <div>
+          <span>{state.data?.child.id ?? (state.loading ? 'loading' : 'empty')}</span>
+          <button type="button" onClick={() => void state.saveSchedule([]).catch(() => undefined)}>
+            Lưu
+          </button>
+        </div>
+      );
+    }
+
+    const view = render(<Probe context={firstContext} />);
+    await waitFor(() => expect(screen.getByText(firstContext.childProfileId)).toBeTruthy());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu' }));
+    expect(saveScheduleSetup).toHaveBeenCalledWith(firstContext, []);
+
+    view.rerender(<Probe context={secondContext} />);
+    await waitFor(() => expect(loadFamilyData).toHaveBeenCalledWith(secondContext));
+    expect(screen.getByText('loading')).toBeTruthy();
+
+    await act(async () => {
+      resolveSave();
+      await pendingSave;
+    });
+    expect(loadFamilyData).toHaveBeenCalledTimes(2);
+
+    await act(async () => {
+      resolveSecondLoad(familyData(secondContext.childProfileId));
+      await pendingSecondLoad;
+    });
+    await waitFor(() => expect(screen.getByText(secondContext.childProfileId)).toBeTruthy());
+    expect(screen.queryByText(firstContext.childProfileId)).toBeNull();
   });
 });

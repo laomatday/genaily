@@ -31,9 +31,8 @@ function platformLabel(platform: string): string {
   return platform === 'android' ? 'Android' : 'iPhone / iPad';
 }
 
-function DeviceStatus({ device, now }: { device: ManagedDeviceRow; now: number | null }) {
-  if (device.status === 'pairing') return <span className="device-status is-pairing">Chờ ghép</span>;
-  const online = now !== null && device.last_seen_at !== null
+function DeviceStatus({ device, now }: { device: ManagedDeviceRow; now: number }) {
+  const online = device.last_seen_at !== null
     && now - new Date(device.last_seen_at).getTime() <= APP_CONFIG.deviceOnlineWindowMs;
   return <span className={`device-status ${online ? 'is-online' : 'is-offline'}`}>{online ? 'Trực tuyến' : 'Ngoại tuyến'}</span>;
 }
@@ -54,23 +53,35 @@ export function DeviceManagementDialog({ data, saving, onCreate, onRevoke, onClo
   const [copied, setCopied] = useState(false);
   const [confirmRevokeId, setConfirmRevokeId] = useState<string | null>(null);
   const [localError, setLocalError] = useState<string | null>(null);
-  const [now, setNow] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
-    setNow(Date.now());
     const timer = window.setInterval(() => setNow(Date.now()), 30_000);
     return () => window.clearInterval(timer);
   }, []);
 
-  const visibleDevices = useMemo(
-    () => data.managedDevices.filter((device) => device.status !== 'revoked'),
+  const pairedDevices = useMemo(
+    () => data.managedDevices.filter((device) => device.status === 'active'),
     [data.managedDevices],
   );
+  const pendingDevice = useMemo(
+    () => data.managedDevices.find((device) => device.status === 'pairing' && device.platform === platform) ?? null,
+    [data.managedDevices, platform],
+  );
+  const visiblePairing = pairing && !pairedDevices.some((device) => device.id === pairing.deviceId)
+    ? pairing
+    : null;
+  const pairingExpired = visiblePairing !== null && new Date(visiblePairing.expiresAt).getTime() <= now;
+  const pendingExpired = pendingDevice !== null
+    && (pendingDevice.pairing_expires_at === null || new Date(pendingDevice.pairing_expires_at).getTime() <= now);
 
   const selectPlatform = (value: string) => {
     if (value !== 'android' && value !== 'ios') return;
     setPlatform(value);
     setDisplayName(`${data.child.full_name} · ${value === 'android' ? 'Android' : 'iPhone / iPad'}`);
+    setPairing(null);
+    setCopied(false);
+    setLocalError(null);
   };
 
   const createPairing = async () => {
@@ -133,10 +144,10 @@ export function DeviceManagementDialog({ data, saving, onCreate, onRevoke, onClo
           <section className="device-section" aria-labelledby="paired-device-title">
             <div className="device-section-heading">
               <h3 id="paired-device-title">Đã ghép</h3>
-              <span>{visibleDevices.length} thiết bị</span>
+              <span>{pairedDevices.length} thiết bị</span>
             </div>
             <div className="managed-device-list">
-              {visibleDevices.map((device) => {
+              {pairedDevices.map((device) => {
                 const latestDelivery = data.deviceCommandDeliveries.find((delivery) => delivery.device_id === device.id);
                 return (
                   <article className="managed-device-card" key={device.id}>
@@ -159,7 +170,7 @@ export function DeviceManagementDialog({ data, saving, onCreate, onRevoke, onClo
                   </article>
                 );
               })}
-              {visibleDevices.length === 0 ? (
+              {pairedDevices.length === 0 ? (
                 <div className="device-empty-state"><MaterialIcon name="devices" /><b>Chưa ghép thiết bị</b><p>Tạo mã bên dưới rồi nhập mã đó trong companion app trên máy của trẻ.</p></div>
               ) : null}
             </div>
@@ -186,24 +197,41 @@ export function DeviceManagementDialog({ data, saving, onCreate, onRevoke, onClo
                 onChange={(event) => setDisplayName(event.target.value)}
               />
             </label>
-            {pairing ? (
-              <div className="pairing-code-card" role="status">
-                <small>Mã dùng một lần</small>
-                <strong>{formatPairingCode(pairing.pairingCode)}</strong>
-                <span>Hết hạn lúc {new Date(pairing.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</span>
-                <button type="button" className="secondary-action" onClick={() => void copyPairingCode()}>
-                  <MaterialIcon name={copied ? 'check' : 'content_copy'} />{copied ? 'Đã sao chép' : 'Sao chép mã'}
+            {visiblePairing ? (
+              <div className={`pairing-code-card ${pairingExpired ? 'is-expired' : ''}`} role="status">
+                <small>{pairingExpired ? 'Mã đã hết hạn' : 'Mã dùng một lần'}</small>
+                <strong>{formatPairingCode(visiblePairing.pairingCode)}</strong>
+                <span>{pairingExpired ? 'Tạo mã mới để tiếp tục ghép nối.' : `Hết hạn lúc ${new Date(visiblePairing.expiresAt).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`}</span>
+                <button
+                  type="button"
+                  className={pairingExpired ? 'primary-action' : 'secondary-action'}
+                  disabled={saving}
+                  onClick={() => void (pairingExpired ? createPairing() : copyPairingCode())}
+                >
+                  <MaterialIcon name={pairingExpired ? 'sync' : copied ? 'check' : 'content_copy'} />
+                  {pairingExpired ? 'Tạo mã mới' : copied ? 'Đã sao chép' : 'Sao chép mã'}
                 </button>
               </div>
             ) : (
-              <button
-                type="button"
-                className="primary-action device-create-button"
-                disabled={saving || !displayName.trim()}
-                onClick={() => void createPairing()}
-              >
-                <MaterialIcon name="add" />{saving ? 'Đang tạo…' : 'Tạo mã ghép'}
-              </button>
+              <>
+                {pendingDevice ? (
+                  <p className={`device-pending-note ${pendingExpired ? 'is-expired' : ''}`} role="status">
+                    <MaterialIcon name="timer" />
+                    {pendingExpired
+                      ? 'Mã ghép trước đã hết hạn. Hãy tạo mã mới.'
+                      : 'Đang có mã chờ ghép. Vì mã chỉ hiện một lần, hãy tạo mã mới nếu bạn không còn giữ mã cũ.'}
+                  </p>
+                ) : null}
+                <button
+                  type="button"
+                  className="primary-action device-create-button"
+                  disabled={saving || !displayName.trim()}
+                  onClick={() => void createPairing()}
+                >
+                  <MaterialIcon name={pendingDevice ? 'sync' : 'add'} />
+                  {saving ? 'Đang tạo…' : pendingDevice ? 'Tạo mã mới' : 'Tạo mã ghép'}
+                </button>
+              </>
             )}
             <ol className="device-pairing-steps">
               <li><span>1</span><p>Cài companion app genAi Family trên thiết bị của trẻ.</p></li>

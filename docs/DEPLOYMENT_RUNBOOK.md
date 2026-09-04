@@ -24,7 +24,7 @@ npm run seed:e2e
 npm run test:e2e
 ```
 
-Kết quả bắt buộc: migration reset sạch, 99 pgTAP assertion đạt và bảy E2E có
+Kết quả bắt buộc: migration reset sạch, 104 pgTAP assertion đạt và tám E2E có
 mutation không bị skip.
 
 ## 3. Áp dụng staging

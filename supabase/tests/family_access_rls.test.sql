@@ -1,7 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(99);
+select plan(104);
 
 select ok(
   (
@@ -569,6 +569,93 @@ select lives_ok(
     250
   )$$,
   'parent can create a protected child milestone'
+);
+
+select lives_ok(
+  $$select public.save_schedule_setup(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000002'::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'id', '20000000-0000-4000-8000-000000000001',
+      'title', 'Lịch riêng của bé thứ nhất',
+      'subject', 'Toán',
+      'event_type', 'self_study',
+      'day_of_week', 'mon',
+      'start_time', '19:00',
+      'duration_minutes', 45,
+      'sort_order', 10,
+      'study_lock_enabled', true
+    ))
+  )$$,
+  'parent saves the first child schedule through the child-scoped RPC'
+);
+select lives_ok(
+  $$select public.save_schedule_setup(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000005'::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'title', 'Lịch riêng của bé thứ hai',
+      'subject', 'Khoa học',
+      'event_type', 'self_study',
+      'day_of_week', 'tue',
+      'start_time', '18:00',
+      'duration_minutes', 30,
+      'sort_order', 20,
+      'study_lock_enabled', true
+    ))
+  )$$,
+  'the same parent saves a separate schedule for a second child'
+);
+select results_eq(
+  $$select child_profile_id::text || ':' || count(*)::text
+    from public.schedule_events
+    where family_id = (select family_id from rls_test_context)
+      and child_profile_id in (
+        '10000000-0000-4000-8000-000000000002'::uuid,
+        '10000000-0000-4000-8000-000000000005'::uuid
+      )
+    group by child_profile_id
+    order by child_profile_id$$,
+  array[
+    '10000000-0000-4000-8000-000000000002:1'::text,
+    '10000000-0000-4000-8000-000000000005:1'::text
+  ],
+  'saving one child keeps exactly one independent schedule for each sibling'
+);
+select throws_ok(
+  $$select public.save_schedule_setup(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000005'::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'id', '20000000-0000-4000-8000-000000000001',
+      'title', 'Không được ghi đè lịch anh chị em',
+      'subject', 'Khoa học',
+      'event_type', 'self_study',
+      'day_of_week', 'wed',
+      'start_time', '18:30',
+      'duration_minutes', 30,
+      'sort_order', 30,
+      'study_lock_enabled', true
+    ))
+  )$$,
+  'P0001',
+  'Schedule item not found',
+  'the second child cannot reuse an event id owned by the first child'
+);
+select results_eq(
+  $$select child_profile_id::text || ':' || subject || ':' || title
+    from public.schedule_events
+    where family_id = (select family_id from rls_test_context)
+      and child_profile_id in (
+        '10000000-0000-4000-8000-000000000002'::uuid,
+        '10000000-0000-4000-8000-000000000005'::uuid
+      )
+    order by child_profile_id$$,
+  array[
+    '10000000-0000-4000-8000-000000000002:Toán:Lịch riêng của bé thứ nhất'::text,
+    '10000000-0000-4000-8000-000000000005:Khoa học:Lịch riêng của bé thứ hai'::text
+  ],
+  'a rejected cross-child id leaves both schedules unchanged'
 );
 
 select throws_ok(

@@ -5,7 +5,7 @@ import {
   contextFromAccountChild,
   type AccountChild,
 } from '../hooks/useAccountChildren';
-import { serializeFamilyContext, type FamilyContext } from '../lib/familyIdentity';
+import { persistFamilyContext, type FamilyContext } from '../lib/familyIdentity';
 import { AppDropdown } from './AppDropdown';
 import { AppLogo } from './AppLogo';
 import { ChildAvatar } from './ChildAvatar';
@@ -43,13 +43,7 @@ export function ChildSelectionScreen({
       setError('Hồ sơ của bé không hợp lệ. Vui lòng tải lại trang.');
       return;
     }
-    try {
-      const storedContext = serializeFamilyContext(context);
-      localStorage.setItem(`genai_family_active_context_${user.id}`, storedContext);
-      localStorage.setItem('genai_family_active_context', storedContext);
-    } catch {
-      // The server remains the source of truth.
-    }
+    persistFamilyContext(user.id, context);
     onChildSelected(context);
   };
 

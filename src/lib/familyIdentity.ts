@@ -9,6 +9,7 @@ export interface FamilyContext {
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export const APP_MODE_STORAGE_KEY = 'genai_family_active_mode';
+export const ACTIVE_FAMILY_CONTEXT_STORAGE_KEY = 'genai_family_active_context';
 export const DEVICE_SETUP_STORAGE_KEY_PREFIX = 'genai_family_device_setup_';
 const FAMILY_CONTEXT_STORAGE_VERSION = 1;
 const DEVICE_SETUP_STORAGE_VERSION = 1;
@@ -47,6 +48,10 @@ export function getDeviceSetupStorageKey(userId: string): string {
   return `${DEVICE_SETUP_STORAGE_KEY_PREFIX}${userId}`;
 }
 
+export function getAccountFamilyContextStorageKey(userId: string): string {
+  return `${ACTIVE_FAMILY_CONTEXT_STORAGE_KEY}_${userId}`;
+}
+
 export function serializeDeviceSetup(userId: string, mode: DeviceSetupMode): string {
   const setup: StoredDeviceSetup = {
     version: DEVICE_SETUP_STORAGE_VERSION,
@@ -72,8 +77,8 @@ export function parseDeviceSetup(value: string | null, userId: string): DeviceSe
 }
 
 export function isAccountDataStorageKey(key: string, userId: string): boolean {
-  return key === 'genai_family_active_context'
-    || key === `genai_family_active_context_${userId}`
+  return key === ACTIVE_FAMILY_CONTEXT_STORAGE_KEY
+    || key === getAccountFamilyContextStorageKey(userId)
     || key === getDeviceSetupStorageKey(userId)
     || key === `genai_account_children_v1_${userId}`
     || key === `genai_user_families_${userId}`
@@ -134,10 +139,52 @@ export function parseFamilyContext(value: string | null, now = Date.now()): Fami
   }
 }
 
+export function loadPersistedFamilyContext(userId?: string, now = Date.now()): FamilyContext | null {
+  if (typeof window === 'undefined') return null;
+  const key = userId && isUuid(userId)
+    ? getAccountFamilyContextStorageKey(userId)
+    : ACTIVE_FAMILY_CONTEXT_STORAGE_KEY;
+  try {
+    return parseFamilyContext(localStorage.getItem(key), now);
+  } catch {
+    return null;
+  }
+}
+
+export function persistFamilyContext(
+  userId: string,
+  context: FamilyContext,
+  now = Date.now(),
+): void {
+  if (typeof window === 'undefined' || !isUuid(userId) || !isFamilyContext(context)) return;
+  try {
+    const storedContext = serializeFamilyContext(context, now);
+    localStorage.setItem(getAccountFamilyContextStorageKey(userId), storedContext);
+    localStorage.setItem(ACTIVE_FAMILY_CONTEXT_STORAGE_KEY, storedContext);
+  } catch {
+    // Browser storage is optional; the in-memory context remains authoritative.
+  }
+}
+
+export function clearPersistedFamilyContext(userId?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(ACTIVE_FAMILY_CONTEXT_STORAGE_KEY);
+    if (userId && isUuid(userId)) {
+      localStorage.removeItem(getAccountFamilyContextStorageKey(userId));
+    }
+  } catch {
+    // Browser storage is optional.
+  }
+}
+
 export function purgeInvalidFamilyStorage(userId: string): void {
   if (typeof window === 'undefined') return;
 
-  const activeKeys = [`genai_family_active_context_${userId}`, 'genai_family_active_context'];
+  const activeKeys = [
+    getAccountFamilyContextStorageKey(userId),
+    ACTIVE_FAMILY_CONTEXT_STORAGE_KEY,
+  ];
   for (const key of activeKeys) {
     const raw = localStorage.getItem(key);
     if (raw && !parseFamilyContext(raw)) localStorage.removeItem(key);

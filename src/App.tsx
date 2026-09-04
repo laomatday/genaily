@@ -9,14 +9,15 @@ import { contextFromAccountChild, useAccountChildren, type AccountChild } from '
 import { useFamilyData } from './hooks/useFamilyData';
 import {
   APP_MODE_STORAGE_KEY,
+  clearPersistedFamilyContext,
   getDeviceSetupStorageKey,
   isFamilyContext,
+  loadPersistedFamilyContext,
   parseDeviceSetup,
-  parseFamilyContext,
+  persistFamilyContext,
   purgeAccountStorage,
   resolveAppEntryDecision,
   serializeDeviceSetup,
-  serializeFamilyContext,
   type DeviceSetupMode,
   type FamilyContext,
 } from './lib/familyIdentity';
@@ -103,14 +104,7 @@ export default function App() {
   const auth = useAuth();
   const accountChildren = useAccountChildren(auth.user);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
-  const [context, setContext] = useState<FamilyContext | null>(() => {
-    if (typeof window === 'undefined') return null;
-    try {
-      return parseFamilyContext(localStorage.getItem('genai_family_active_context'));
-    } catch {
-      return null;
-    }
-  });
+  const [context, setContext] = useState<FamilyContext | null>(() => loadPersistedFamilyContext());
   const [role, setRole] = useState<'parent' | 'child'>('parent');
   const [modeCheckState, setModeCheckState] = useState<'idle' | 'checking' | 'ready' | 'error'>('idle');
   const [modeCheckGeneration, setModeCheckGeneration] = useState(0);
@@ -123,17 +117,18 @@ export default function App() {
     role,
   );
   const authUserId = auth.user?.id;
+  const contextFamilyId = context?.familyId;
+  const contextParentId = context?.parentProfileId;
   const contextChildId = context?.childProfileId;
 
   // Keep the selected child synchronized with the account's managed profiles.
   useEffect(() => {
     if (!authUserId) {
+      // During getSession() the user is temporarily null. Clearing here used
+      // to erase the selected second child before Auth finished bootstrapping.
+      if (auth.loading) return;
       setContext(null);
-      try {
-        localStorage.removeItem('genai_family_active_context');
-      } catch {
-        // ignore
-      }
+      clearPersistedFamilyContext();
       return;
     }
 
@@ -142,43 +137,58 @@ export default function App() {
     // entry picker is open.
     if (modeCheckState !== 'ready' || onboardingRequired) return;
     if (childPickerOpen) return;
+    if (role === 'child') return;
     if (accountChildren.loading) return;
+    if (accountChildren.error) return;
 
     if (accountChildren.children.length > 0) {
-      const match = contextChildId
-        ? accountChildren.children.find((child) => child.child_profile_id === contextChildId)
-        : null;
-      if (match) return;
-
-      const first = accountChildren.children[0];
-      const autoContext: FamilyContext = {
-        familyId: first.account_space_id,
-        parentProfileId: first.parent_profile_id,
-        childProfileId: first.child_profile_id,
-      };
-      setContext(autoContext);
-      try {
-        localStorage.setItem('genai_family_active_context', serializeFamilyContext(autoContext));
-      } catch {
-        // ignore
+      const selectedContext = contextFamilyId && contextParentId && contextChildId
+        ? {
+          familyId: contextFamilyId,
+          parentProfileId: contextParentId,
+          childProfileId: contextChildId,
+        }
+        : loadPersistedFamilyContext(authUserId);
+      const match = selectedContext
+        ? accountChildren.children.find((child) => (
+          child.account_space_id === selectedContext.familyId
+          && child.parent_profile_id === selectedContext.parentProfileId
+          && child.child_profile_id === selectedContext.childProfileId
+        ))
+        : undefined;
+      const canonicalContext = match ? contextFromAccountChild(match) : null;
+      if (canonicalContext) {
+        if (contextFamilyId !== canonicalContext.familyId
+            || contextParentId !== canonicalContext.parentProfileId
+            || contextChildId !== canonicalContext.childProfileId) {
+          setContext(canonicalContext);
+        }
+        persistFamilyContext(authUserId, canonicalContext);
+        return;
       }
+
+      // A missing or stale selection must be resolved explicitly. Falling
+      // back to children[0] makes a valid save target the wrong child.
+      setContext(null);
+      clearPersistedFamilyContext(authUserId);
       return;
     }
 
     setContext(null);
-    try {
-      localStorage.removeItem('genai_family_active_context');
-    } catch {
-      // ignore
-    }
+    clearPersistedFamilyContext(authUserId);
   }, [
     accountChildren.children,
+    accountChildren.error,
     accountChildren.loading,
+    auth.loading,
     authUserId,
     childPickerOpen,
     contextChildId,
+    contextFamilyId,
+    contextParentId,
     modeCheckState,
     onboardingRequired,
+    role,
   ]);
 
   // The server-side session mode is authoritative. A parent session can reuse
@@ -230,11 +240,7 @@ export default function App() {
           setRole('child');
           persistDeviceSetup(authUserId, 'child');
           persistMode('child');
-          try {
-            localStorage.setItem('genai_family_active_context', serializeFamilyContext(serverContext));
-          } catch {
-            // Server mode remains authoritative when browser storage is unavailable.
-          }
+          persistFamilyContext(authUserId, serverContext);
           setModeCheckState('ready');
           return;
         }
@@ -316,11 +322,7 @@ export default function App() {
     if (!isFamilyContext(newContext)) return;
     setContext(newContext);
     setChildPickerOpen(false);
-    try {
-      localStorage.setItem('genai_family_active_context', serializeFamilyContext(newContext));
-    } catch {
-      // ignore
-    }
+    if (authUserId) persistFamilyContext(authUserId, newContext);
   };
 
   const handleAccountChildSelected = (child: AccountChild) => {
@@ -362,14 +364,16 @@ export default function App() {
     }
     persistDeviceSetup(authUserId, 'parent');
     persistMode('parent');
-    const matchedChild = context
+    const currentChild = context
       ? accountChildren.children.find((child) => (
         child.account_space_id === context.familyId
         && child.parent_profile_id === context.parentProfileId
         && child.child_profile_id === context.childProfileId
       ))
       : undefined;
-    const initialChild = matchedChild ?? accountChildren.children[0];
+    // This default is allowed only immediately after the user explicitly
+    // chooses parent mode. Recovery/reload paths never fall back silently.
+    const initialChild = currentChild ?? accountChildren.children[0];
     const initialContext = initialChild ? contextFromAccountChild(initialChild) : null;
     if (initialContext) handleChildSelected(initialContext);
     setEntryModeInitialStep('mode');
@@ -469,10 +473,6 @@ export default function App() {
         onLogout={handleLogout}
       />
     );
-  }
-
-  if (role === 'parent' && !context && !childPickerOpen && accountChildren.children.length > 0) {
-    return <LoadingScreen label="Đang mở hồ sơ của bé…" />;
   }
 
   if (!context || childPickerOpen) {
