@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'r
 import { formatGradeLabel, GRADE_LEVEL_OPTIONS, normalizeGradeLevel } from '../domain/education';
 import type { AccountChild } from '../hooks/useAccountChildren';
 import { APP_CONFIG } from '../config/appConfig';
+import { CHILD_AVATAR_ACCEPT, validateChildAvatarFile } from '../domain/childAvatarPolicy';
 import { AppDropdown } from './AppDropdown';
 import { ChildAvatar } from './ChildAvatar';
 import { MaterialIcon } from './MaterialIcon';
@@ -18,7 +19,7 @@ interface ChildProfileSheetProps {
   onClose: () => void;
   onSelect: (child: AccountChild) => void;
   onRename: (childName: string, gradeLevel: number, avatarFile?: File | null, removeAvatar?: boolean) => Promise<void>;
-  onAdd: (childName: string, gradeLevel: number) => Promise<AccountChild>;
+  onAdd: (childName: string, gradeLevel: number, avatarFile?: File | null) => Promise<AccountChild>;
   onClearData?: () => Promise<void>;
 }
 
@@ -83,7 +84,7 @@ export function ChildProfileSheet({
         return;
       }
       if (action === 'add') {
-        const child = await onAdd(name, gradeLevel);
+        const child = await onAdd(name, gradeLevel, draftAvatar);
         closeSheet();
         onSelect(child);
       }
@@ -98,12 +99,10 @@ export function ChildProfileSheet({
     const file = event.target.files?.[0];
     event.target.value = '';
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setLocalError('Ảnh đại diện phải là JPEG, PNG hoặc WebP.');
-      return;
-    }
-    if (file.size <= 0 || file.size > APP_CONFIG.childAvatarMaxBytes) {
-      setLocalError(`Ảnh đại diện không được vượt quá ${Math.round(APP_CONFIG.childAvatarMaxBytes / 1024 / 1024)} MB.`);
+    try {
+      validateChildAvatarFile(file);
+    } catch (cause) {
+      setLocalError(cause instanceof Error ? cause.message : 'Ảnh đại diện không hợp lệ.');
       return;
     }
     setLocalError(null);
@@ -166,29 +165,27 @@ export function ChildProfileSheet({
 
         {action === 'rename' || action === 'add' ? (
           <form className="child-name-form" onSubmit={submitName}>
-            {action === 'rename' ? (
-              <div className="child-avatar-editor">
-                <ChildAvatar
-                  className="child-avatar-editor-preview"
-                  name={draftName || selectedChild?.child_name}
-                  avatarPath={removeAvatar ? null : selectedChild?.child_avatar_url}
-                  previewUrl={avatarPreviewUrl}
-                />
-                <div className="child-avatar-editor-actions">
-                  <label className="child-avatar-picker">
-                    <MaterialIcon name="photo_camera" />
-                    <span>{draftAvatar || selectedChild?.child_avatar_url ? 'Đổi ảnh' : 'Chọn ảnh'}</span>
-                    <input type="file" accept="image/jpeg,image/png,image/webp" onChange={selectAvatar} disabled={busy} />
-                  </label>
-                  {(draftAvatar || (!removeAvatar && selectedChild?.child_avatar_url)) ? (
-                    <button type="button" className="child-avatar-remove" onClick={clearAvatar} disabled={busy}>
-                      <MaterialIcon name="delete" />Xóa ảnh
-                    </button>
-                  ) : null}
-                  <small>JPEG, PNG hoặc WebP · tối đa {Math.round(APP_CONFIG.childAvatarMaxBytes / 1024 / 1024)} MB</small>
-                </div>
+            <div className="child-avatar-editor">
+              <ChildAvatar
+                className="child-avatar-editor-preview"
+                name={draftName || selectedChild?.child_name}
+                avatarPath={action === 'rename' && !removeAvatar ? selectedChild?.child_avatar_url : null}
+                previewUrl={avatarPreviewUrl}
+              />
+              <div className="child-avatar-editor-actions">
+                <label className="child-avatar-picker">
+                  <MaterialIcon name="photo_camera" />
+                  <span>{draftAvatar || (action === 'rename' && selectedChild?.child_avatar_url) ? 'Đổi ảnh' : 'Chọn ảnh'}</span>
+                  <input type="file" accept={CHILD_AVATAR_ACCEPT} onChange={selectAvatar} disabled={busy} />
+                </label>
+                {(draftAvatar || (action === 'rename' && !removeAvatar && selectedChild?.child_avatar_url)) ? (
+                  <button type="button" className="child-avatar-remove" onClick={clearAvatar} disabled={busy}>
+                    <MaterialIcon name="delete" />Xóa ảnh
+                  </button>
+                ) : null}
+                <small>JPEG, PNG hoặc WebP · tối đa {Math.round(APP_CONFIG.childAvatarMaxBytes / 1024 / 1024)} MB</small>
               </div>
-            ) : null}
+            </div>
             <label>
               {action === 'rename' ? 'Tên của bé' : 'Tên bé / học sinh'}
               <input

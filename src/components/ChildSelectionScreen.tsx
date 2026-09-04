@@ -1,6 +1,8 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type ChangeEvent, type FormEvent } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { APP_CONFIG } from '../config/appConfig';
 import { GRADE_LEVEL_OPTIONS, normalizeGradeLevel } from '../domain/education';
+import { CHILD_AVATAR_ACCEPT, validateChildAvatarFile } from '../domain/childAvatarPolicy';
 import {
   contextFromAccountChild,
   type AccountChild,
@@ -17,7 +19,7 @@ interface ChildSelectionScreenProps {
   children: AccountChild[];
   childrenError: string | null;
   onChildSelected: (context: FamilyContext) => void;
-  onAddChild: (childName: string, gradeLevel: number) => Promise<AccountChild>;
+  onAddChild: (childName: string, gradeLevel: number, avatarFile?: File | null) => Promise<AccountChild>;
   onLogout: () => Promise<void>;
 }
 
@@ -32,10 +34,22 @@ export function ChildSelectionScreen({
   const [isCreating, setIsCreating] = useState(false);
   const [childName, setChildName] = useState('');
   const [gradeLevel, setGradeLevel] = useState<number | ''>('');
+  const [avatarFile, setAvatarFile] = useState<File | null>(null);
+  const [avatarPreviewUrl, setAvatarPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const showCreateForm = children.length === 0 || isCreating;
+
+  useEffect(() => {
+    if (!avatarFile) {
+      setAvatarPreviewUrl(null);
+      return;
+    }
+    const url = URL.createObjectURL(avatarFile);
+    setAvatarPreviewUrl(url);
+    return () => URL.revokeObjectURL(url);
+  }, [avatarFile]);
 
   const selectChild = (child: AccountChild) => {
     const context = contextFromAccountChild(child);
@@ -56,13 +70,27 @@ export function ChildSelectionScreen({
     setError(null);
 
     try {
-      const child = await onAddChild(name, grade);
+      const child = await onAddChild(name, grade, avatarFile);
       selectChild(child);
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : 'Không thêm được hồ sơ con.');
     } finally {
       setLoading(false);
     }
+  };
+
+  const selectAvatar = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    try {
+      validateChildAvatarFile(file);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Ảnh đại diện không hợp lệ.');
+      return;
+    }
+    setError(null);
+    setAvatarFile(file);
   };
 
   return (
@@ -134,6 +162,26 @@ export function ChildSelectionScreen({
               Lịch học, mục tiêu và tiến độ sẽ được lưu riêng cho bé này.
             </p>
             <form onSubmit={handleCreate} className="grid gap-4">
+              <div className="child-avatar-editor">
+                <ChildAvatar
+                  className="child-avatar-editor-preview"
+                  name={childName}
+                  previewUrl={avatarPreviewUrl}
+                />
+                <div className="child-avatar-editor-actions">
+                  <label className="child-avatar-picker">
+                    <MaterialIcon name="photo_camera" />
+                    <span>{avatarFile ? 'Đổi ảnh' : 'Chọn ảnh'}</span>
+                    <input type="file" accept={CHILD_AVATAR_ACCEPT} onChange={selectAvatar} disabled={loading} />
+                  </label>
+                  {avatarFile ? (
+                    <button type="button" className="child-avatar-remove" onClick={() => setAvatarFile(null)} disabled={loading}>
+                      <MaterialIcon name="delete" />Xóa ảnh
+                    </button>
+                  ) : null}
+                  <small>JPEG, PNG hoặc WebP · tối đa {Math.round(APP_CONFIG.childAvatarMaxBytes / 1024 / 1024)} MB</small>
+                </div>
+              </div>
               <label className="text-xs font-bold app-text-muted">
                 Tên bé / học sinh
                 <input
@@ -170,7 +218,7 @@ export function ChildSelectionScreen({
                 {children.length > 0 ? (
                   <button
                     type="button"
-                    onClick={() => setIsCreating(false)}
+                    onClick={() => { setIsCreating(false); setAvatarFile(null); setError(null); }}
                     className="flex-1 rounded-2xl app-surface-muted py-3 text-sm font-bold"
                   >
                     Hủy

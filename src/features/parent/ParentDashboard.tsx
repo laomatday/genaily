@@ -48,7 +48,7 @@ interface ParentDashboardProps {
   onCreateDevicePairing: (displayName: string, platform: DevicePlatform) => Promise<DevicePairingResult>;
   onRevokeDevice: (deviceId: string) => Promise<void>;
   onUpdateProfile: (childName: string, gradeLevel: number, avatarFile?: File | null, removeAvatar?: boolean) => Promise<void>;
-  onAddChild: (childName: string, gradeLevel: number) => Promise<AccountChild>;
+  onAddChild: (childName: string, gradeLevel: number, avatarFile?: File | null) => Promise<AccountChild>;
   onSelectChild: (child: AccountChild) => void;
   onClearData?: () => Promise<void>;
   onSwitchToChild: () => Promise<void>;
@@ -115,7 +115,6 @@ export function ParentDashboard({
     setDetailsOpen(true);
   };
 
-  const pendingCount = data.sessions.filter(s => s.status === 'awaiting_parent').length;
   const unreadCount = data.notifications.filter((notification) => !notification.is_read).length;
   const activeMilestone = data.milestones.find((milestone) => ['active', 'unlocked'].includes(milestone.status));
 
@@ -136,60 +135,64 @@ export function ParentDashboard({
 
   return (
     <div className="app-shell min-h-screen app-background pb-28 app-text-color">
-      <div className="p-4 sm:p-5">
+      <div className="parent-dashboard-frame">
         <ParentHeader
           childName={data.child.full_name}
-          childGrade={data.child.grade_level}
           childAvatarPath={data.child.avatar_url}
           parentName={accountName}
           parentAvatarUrl={data.parent.avatar_url}
-          notificationCount={unreadCount + pendingCount}
+          notificationCount={unreadCount}
+          childProfilesOpen={childProfilesOpen}
+          notificationsOpen={notificationsOpen}
+          menuOpen={menuOpen}
           onShowNotifications={() => setNotificationsOpen(true)}
           onOpenMenu={() => setMenuOpen(true)}
           onOpenChildProfiles={() => setChildProfilesOpen(true)}
         />
-        {tab === 'today' && (
-          <TodayPanel
-            data={data}
-            session={currentSession}
-            saving={saving}
-            onApprove={onApprove}
-            onOpenDetails={handleOpenDetails}
-            onSelectEvent={handleSelectEvent}
-            onSwitchToChild={onSwitchToChild}
-            onOpenDevices={() => setDevicesOpen(true)}
-            onOpenSetup={() => setScheduleSetupOpen(true)}
-          />
-        )}
-        {tab === 'week' && (
-          <WeekPanel
-            data={data}
-            selectedDay={selectedDay}
-            onSelectDay={setSelectedDay}
-            onOpenSetup={() => setScheduleSetupOpen(true)}
-            onRefresh={onRefresh}
-          />
-        )}
-        {tab === 'plan' && (
-          <PlanPanel
-            data={data}
-            saving={saving}
-            onAddGoal={() => setGoalOpen(true)}
-            onGenerate={onGenerateWeek}
-            onApply={onApplyWeek}
-            onEditMilestone={() => setMilestoneOpen(true)}
-          />
-        )}
-        {tab === 'learning' && (
-          <LearningPanel
-            data={data}
-            session={currentSession}
-            loadingMore={loadingMore}
-            onLoadMore={onLoadMoreSessions}
-          />
-        )}
-        {tab === 'exceptions' && <ExceptionsPanel data={data} />}
-        {error && <p className="mt-5 rounded-2xl app-red-soft p-3 text-center text-xs app-red-text">{error}</p>}
+        <main className="parent-dashboard-content">
+          {tab === 'today' && (
+            <TodayPanel
+              data={data}
+              session={currentSession}
+              saving={saving}
+              onApprove={onApprove}
+              onOpenDetails={handleOpenDetails}
+              onSelectEvent={handleSelectEvent}
+              onSwitchToChild={onSwitchToChild}
+              onOpenDevices={() => setDevicesOpen(true)}
+              onOpenSetup={() => setScheduleSetupOpen(true)}
+            />
+          )}
+          {tab === 'week' && (
+            <WeekPanel
+              data={data}
+              selectedDay={selectedDay}
+              onSelectDay={setSelectedDay}
+              onOpenSetup={() => setScheduleSetupOpen(true)}
+              onRefresh={onRefresh}
+            />
+          )}
+          {tab === 'plan' && (
+            <PlanPanel
+              data={data}
+              saving={saving}
+              onAddGoal={() => setGoalOpen(true)}
+              onGenerate={onGenerateWeek}
+              onApply={onApplyWeek}
+              onEditMilestone={() => setMilestoneOpen(true)}
+            />
+          )}
+          {tab === 'learning' && (
+            <LearningPanel
+              data={data}
+              session={currentSession}
+              loadingMore={loadingMore}
+              onLoadMore={onLoadMoreSessions}
+            />
+          )}
+          {tab === 'exceptions' && <ExceptionsPanel data={data} />}
+          {error && <p className="mt-5 rounded-2xl app-red-soft p-3 text-center text-xs app-red-text">{error}</p>}
+        </main>
       </div>
 
       <ParentNav active={tab} onChange={setTab} />

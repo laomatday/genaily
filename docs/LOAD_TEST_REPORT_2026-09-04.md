@@ -40,11 +40,11 @@ cấu hình tương đương production.
 | --- | --- |
 | ESLint, Stylelint, hardcode audit, TypeScript | Đạt |
 | Migration parser | 35 file đạt |
-| Unit/integration | 24 file, 71 test đạt |
+| Unit/integration | 25 file, 74 test đạt |
 | pgTAP/RLS trên DB thật trong transaction rollback | 119/119 đạt; không còn fixture |
-| Mobile Playwright công khai | 3 đạt |
+| Mobile Playwright công khai | 4 đạt |
 | Mobile Playwright cần tài khoản E2E | 8 skip do chưa cấu hình credentials staging |
-| Production build + bundle budget | Đạt; tổng JavaScript gzip 189.710 byte |
+| Production build + bundle budget | Đạt; tổng JavaScript gzip 189.845 byte |
 | Snapshot dưới role `authenticated` thật | Đạt; khoảng 25–27 ms, 3,3–3,8 KB trên dữ liệu thưa |
 | `device-agent` | ACTIVE v3; request chưa ghép trả đúng HTTP 401 |
 | `dispatch-device-command` | ACTIVE v4 |

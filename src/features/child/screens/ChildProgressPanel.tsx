@@ -17,10 +17,9 @@ interface ChildProgressPanelProps {
   data: FamilyData;
   loadingMore: boolean;
   onLoadMore: () => Promise<void>;
-  onOpenMenu: () => void;
 }
 
-export function ChildProgressPanel({ data, loadingMore, onLoadMore, onOpenMenu }: ChildProgressPanelProps) {
+export function ChildProgressPanel({ data, loadingMore, onLoadMore }: ChildProgressPanelProps) {
   const finishedSessions = data.sessions.filter((session) => ['approved', 'completed'].includes(session.status));
   const completedMinutes = finishedSessions.reduce((sum, session) => sum + (session.duration_minutes ?? 0), 0);
   const completedTasks = data.tasks.filter((task) => task.is_done).length;
@@ -29,12 +28,7 @@ export function ChildProgressPanel({ data, loadingMore, onLoadMore, onOpenMenu }
   return (
     <section className="p-4 sm:p-5">
       <div className="mb-5">
-        <div className="flex items-center justify-between gap-3">
-          <h1 className="text-2xl font-extrabold">Tiến độ của {data.child.full_name || 'bé'}</h1>
-          <button type="button" onClick={onOpenMenu} className="header-icon-button" aria-label="Mở menu tài khoản">
-            <MaterialIcon name="menu" className="text-xl" />
-          </button>
-        </div>
+        <h1 className="text-2xl font-extrabold">Tiến độ của {data.child.full_name || 'bé'}</h1>
         <p className="mt-1 text-sm app-text-muted">Mục tiêu và kết quả các buổi tự học của con.</p>
       </div>
 

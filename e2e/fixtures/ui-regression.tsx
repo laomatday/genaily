@@ -3,7 +3,9 @@ import { createRoot } from 'react-dom/client';
 import { EntryModeScreen } from '../../src/components/EntryModeScreen';
 import { MaterialIcon } from '../../src/components/MaterialIcon';
 import { ParentGate } from '../../src/components/ParentGate';
+import { ChildHeader } from '../../src/features/child/components/ChildHeader';
 import { ChildNav, type ChildTab } from '../../src/features/child/components/ChildNav';
+import { ParentHeader } from '../../src/features/parent/components/ParentHeader';
 import { ParentNav, type ParentTab } from '../../src/features/parent/components/ParentNav';
 import { ThemeProvider } from '../../src/hooks/useTheme';
 import type { AccountChild } from '../../src/hooks/useAccountChildren';
@@ -60,6 +62,21 @@ function ChildNavigationFixture() {
   );
 }
 
+function ScrollFixtureContent({ label }: { label: string }) {
+  return (
+    <section className="child-dashboard-panel" aria-label={`Nội dung cuộn ${label}`}>
+      {Array.from({ length: 16 }, (_, index) => (
+        <article key={index} className="rounded-2xl border app-border-color app-surface p-4 shadow-sm">
+          <b className="block text-sm">{label} {index + 1}</b>
+          <p className="mt-1 text-xs app-text-muted">
+            Nội dung kiểm thử giúp trang đủ dài để xác nhận header luôn hiển thị khi cuộn.
+          </p>
+        </article>
+      ))}
+    </section>
+  );
+}
+
 export function UiRegressionFixture() {
   const view = new URLSearchParams(window.location.search).get('view');
   if (view === 'parent-gate') {
@@ -81,6 +98,37 @@ export function UiRegressionFixture() {
         <div className="child-quick-stats">
           <button type="button"><MaterialIcon name="lock" />Phụ huynh</button>
         </div>
+      </main>
+    );
+  }
+
+  if (view === 'parent-header') {
+    return (
+      <main className="app-shell min-h-screen app-background app-text-color">
+        <ParentHeader
+          childName="Minh Triết có một tên hồ sơ rất dài"
+          childAvatarPath={null}
+          parentName="Nguyễn Phụ huynh"
+          parentAvatarUrl={null}
+          notificationCount={12}
+          onOpenChildProfiles={() => void recordSelection('profiles')}
+          onShowNotifications={() => void recordSelection('notifications')}
+          onOpenMenu={() => void recordSelection('menu')}
+        />
+        <div className="parent-dashboard-content"><ScrollFixtureContent label="Mục phụ huynh" /></div>
+      </main>
+    );
+  }
+
+  if (view === 'child-header') {
+    return (
+      <main className="app-shell min-h-screen app-background app-text-color">
+        <ChildHeader
+          avatarPath="https://example.test/child-avatar.svg"
+          childName="Minh Triết"
+          onOpenMenu={() => void recordSelection('child-menu')}
+        />
+        <ScrollFixtureContent label="Nhiệm vụ của bé" />
       </main>
     );
   }

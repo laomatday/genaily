@@ -103,6 +103,9 @@ schedule_events (mẫu tuần)
 - [x] Màu/spacing/radius/shadow dùng token/class trong `src/style.css`; TSX không
   còn literal hex/rgb hoặc inline style.
 - [x] Light/dark/system theme trong sidebar; nền child/parent dùng cùng token.
+- [x] Header ba/mẹ lấy cảm hứng từ Google Family Link: logo và avatar bé trong
+  một profile pill, chuông/avatar tài khoản có touch target chuẩn, sticky theo
+  safe area và không tràn ở viewport 320px.
 - [x] Icon giao diện dùng SVG từ Google Material Symbols theo từng icon, không
   tải font icon toàn bộ.
 - [x] Lazy-load Parent Dashboard và Child App.
@@ -139,7 +142,7 @@ schedule_events (mẫu tuần)
 | RLS đầy đủ mọi vai trò | 119 test đã viết | 119/119 đạt trên cloud |
 | Không còn policy/grant demo rộng | Đạt | Advisor + pgTAP đạt |
 | Dữ liệu nhạy cảm không ở localStorage | Đạt | Browser inspection |
-| Onboarding/Save/đổi bé/multi-tab/Parent Gate/Study Lock E2E | 8 flow xác thực + 3 regression công khai | Chạy full với test account |
+| Onboarding/Save/đổi bé/multi-tab/Parent Gate/Study Lock E2E | 8 flow xác thực + 4 regression công khai | Chạy full với test account |
 | Build trong bundle budget | Đạt trong local check | CI production build |
 | README/migration/env/runbook đồng nhất | Đạt | Ops review |
 
@@ -158,10 +161,10 @@ npx supabase test db
 
 Kết quả local ngày 04/09/2026:
 
-- ESLint, Stylelint, hardcode audit và TypeScript đạt; 24 test files/71 tests
+- ESLint, Stylelint, hardcode audit và TypeScript đạt; 25 test files/74 tests
   đạt, 35 migration parse được, production build và bundle budget đạt (tổng
-  JavaScript gzip 189.710 byte).
-- `npm run test:e2e`: 3 flow public/mobile/accessibility đạt; 8 flow xác thực được
+  JavaScript gzip 189.845 byte).
+- `npm run test:e2e`: 4 flow public/mobile/accessibility đạt; 8 flow xác thực được
   skip đúng thiết kế vì chưa cấp test account và `E2E_ALLOW_DATA_MUTATION`.
 - `npm audit --omit=dev`: 0 vulnerability.
 - 119 assertion pgTAP/RLS đã chạy trực tiếp trên project mới trong transaction
@@ -178,7 +181,7 @@ nghiệp vụ chủ đích, có kiểm tra quyền nội bộ và đã qua pgTAP
 `private.app_device_modes` và `private.account_app_onboarding` đã bật RLS, không
 cấp DML cho `anon` hoặc `authenticated`; onboarding chỉ truy cập qua RPC hẹp.
 
-Ba E2E public/accessibility/regression chạy không cần tài khoản. Tám flow xác thực chỉ chạy
+Bốn E2E public/accessibility/regression chạy không cần tài khoản. Tám flow xác thực chỉ chạy
 khi có biến `E2E_*` và `E2E_ALLOW_DATA_MUTATION=true` để tránh vô tình sửa dữ
 liệu thật. CI database tự dựng account test cô lập.
 

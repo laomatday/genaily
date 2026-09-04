@@ -8,7 +8,7 @@ import { formatLocalDateKey, formatWeekRange, getDayKey, getWeekDays } from '../
 import type { FamilyData } from '../../../lib/familyRepository';
 import type { DayKey } from '../../../types';
 
-export function ChildWeekPanel({ data, onOpenMenu }: { data: FamilyData; onOpenMenu: () => void }) {
+export function ChildWeekPanel({ data }: { data: FamilyData }) {
   const [selectedDay, setSelectedDay] = useState<DayKey>(() => getDayKey());
   const days = getWeekDays();
   const selected = days.find((day) => day.key === selectedDay) ?? days[0];
@@ -40,9 +40,8 @@ export function ChildWeekPanel({ data, onOpenMenu }: { data: FamilyData; onOpenM
 
   return (
     <section className="child-dashboard-panel">
-      <header className="screen-intro screen-intro-with-action">
+      <header className="screen-intro">
         <div><span className="screen-eyebrow">{formatWeekRange()}</span><h1>Lịch của {data.child.full_name || 'bé'}</h1><p>Con xem lịch và chuẩn bị; mọi thay đổi do ba/mẹ quản lý.</p></div>
-        <button type="button" onClick={onOpenMenu} className="header-icon-button" aria-label="Mở menu tài khoản"><MaterialIcon name="menu" /></button>
       </header>
 
       <article className="child-week-overview">

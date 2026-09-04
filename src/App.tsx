@@ -1,4 +1,4 @@
-import { Component, lazy, Suspense, useEffect, useMemo, useState, type ErrorInfo, type ReactNode } from 'react';
+import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
 import { AuthScreen } from './components/AuthScreen';
 import { ChildSelectionScreen } from './components/ChildSelectionScreen';
 import { EntryModeScreen } from './components/EntryModeScreen';
@@ -106,6 +106,61 @@ type AuthenticatedAuthState = Omit<AuthState, 'user' | 'loading'> & {
   loading: false;
 };
 
+type ModeCheckState = 'idle' | 'checking' | 'rechecking' | 'ready' | 'error' | 'recheck-error';
+
+function ModeRecheckBarrier({
+  state,
+  error,
+  onRetry,
+}: {
+  state: 'rechecking' | 'recheck-error';
+  error: string | null;
+  onRetry: () => void;
+}) {
+  const barrierRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const previouslyFocused = document.activeElement instanceof HTMLElement
+      ? document.activeElement
+      : null;
+    const focusFrame = window.requestAnimationFrame(() => barrierRef.current?.focus());
+    return () => {
+      window.cancelAnimationFrame(focusFrame);
+      if (previouslyFocused?.isConnected) previouslyFocused.focus();
+    };
+  }, []);
+
+  const failed = state === 'recheck-error';
+  return (
+    <div
+      ref={barrierRef}
+      className="mode-recheck-layer"
+      role={failed ? 'alertdialog' : 'dialog'}
+      aria-modal="true"
+      aria-busy={!failed}
+      aria-labelledby="mode-recheck-title"
+      aria-describedby="mode-recheck-description"
+      tabIndex={-1}
+      onKeyDown={(event) => event.stopPropagation()}
+    >
+      <div className="mode-recheck-card">
+        {!failed ? <span className="mode-recheck-spinner" aria-hidden="true" /> : null}
+        <span className="mode-recheck-copy">
+          <b id="mode-recheck-title">
+            {failed ? 'Chưa xác minh được quyền truy cập' : 'Đang xác minh quyền truy cập'}
+          </b>
+          <small id="mode-recheck-description">
+            {failed ? (error ?? 'Không thể kết nối để kiểm tra quyền.') : 'Dữ liệu đang chỉnh sửa vẫn được giữ nguyên.'}
+          </small>
+        </span>
+        {failed ? (
+          <button type="button" onClick={onRetry}>Thử lại</button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
   const accountChildren = useAccountChildren(auth.user);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
@@ -115,19 +170,23 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
     loadPersistedFamilyContext(auth.user.id)
   ));
   const [role, setRole] = useState<'parent' | 'child'>('parent');
-  const [modeCheckState, setModeCheckState] = useState<'idle' | 'checking' | 'ready' | 'error'>('idle');
+  const [modeCheckState, setModeCheckState] = useState<ModeCheckState>('idle');
   const [modeCheckGeneration, setModeCheckGeneration] = useState(0);
   const [onboardingRequired, setOnboardingRequired] = useState(false);
   const [entryModeInitialStep, setEntryModeInitialStep] = useState<'mode' | 'child'>('mode');
   const [parentGateOpen, setParentGateOpen] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
+  const hasVerifiedMode = useRef(false);
   const authUserId = auth.user.id;
   // localStorage is user-controlled and the legacy global context key may be
   // stale. A family context is usable only when its parent profile belongs to
   // the currently authenticated account.
   const activeContext = context?.parentProfileId === authUserId ? context : null;
+  const keepsVerifiedUiMounted = modeCheckState === 'ready'
+    || modeCheckState === 'rechecking'
+    || modeCheckState === 'recheck-error';
   const familyState = useFamilyData(
-    modeCheckState === 'ready' && !onboardingRequired ? activeContext : null,
+    keepsVerifiedUiMounted && !onboardingRequired ? activeContext : null,
     role,
   );
   const contextFamilyId = activeContext?.familyId;
@@ -212,11 +271,17 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
     if (!authUserId) {
       setModeCheckState('idle');
       setOnboardingRequired(false);
+      hasVerifiedMode.current = false;
       return;
     }
     let active = true;
-    setModeCheckState('checking');
+    const isBackgroundRecheck = hasVerifiedMode.current;
+    setModeCheckState(isBackgroundRecheck ? 'rechecking' : 'checking');
     setModeError(null);
+    const finishModeCheck = () => {
+      hasVerifiedMode.current = true;
+      setModeCheckState('ready');
+    };
     void (async () => {
       try {
         const [serverMode, onboardingComplete] = await Promise.all([
@@ -254,7 +319,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
           persistDeviceSetup(authUserId, 'child');
           persistMode('child');
           persistFamilyContext(authUserId, serverContext);
-          setModeCheckState('ready');
+          finishModeCheck();
           return;
         }
 
@@ -263,7 +328,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
           setOnboardingRequired(true);
           setRole('parent');
           persistMode('parent');
-          setModeCheckState('ready');
+          finishModeCheck();
           return;
         }
 
@@ -275,7 +340,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
           setOnboardingRequired(true);
           setRole('parent');
           persistMode('parent');
-          setModeCheckState('ready');
+          finishModeCheck();
           return;
         }
 
@@ -283,11 +348,11 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
         setOnboardingRequired(false);
         setRole('parent');
         persistMode('parent');
-        setModeCheckState('ready');
+        finishModeCheck();
       } catch (cause) {
         if (!active) return;
         setModeError(cause instanceof Error ? cause.message : 'Không xác minh được chế độ ứng dụng.');
-        setModeCheckState('error');
+        setModeCheckState(isBackgroundRecheck ? 'recheck-error' : 'error');
       }
     })();
     return () => {
@@ -304,9 +369,14 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
 
     let scheduledFrame: number | null = null;
     const scheduleModeRecheck = () => {
-      // Hide privileged UI before the network round-trip. Focus and visibility
-      // commonly fire together, so coalesce their generation bump per frame.
-      setModeCheckState('checking');
+      // Block privileged interaction without unmounting the verified UI. A
+      // native image picker backgrounds the WebView, then emits focus and
+      // visibilitychange on return; unmounting here would discard its File.
+      setModeCheckState((current) => (
+        current === 'ready' || current === 'rechecking' || current === 'recheck-error'
+          ? 'rechecking'
+          : 'checking'
+      ));
       if (scheduledFrame !== null) return;
       scheduledFrame = window.requestAnimationFrame(() => {
         scheduledFrame = null;
@@ -467,12 +537,35 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
       </main>
     );
   }
+
+  const backgroundModeCheck = modeCheckState === 'rechecking' || modeCheckState === 'recheck-error'
+    ? modeCheckState
+    : null;
+  const preserveVerifiedScreen = (content: ReactNode) => (
+    <>
+      <div
+        className="verified-app-shell"
+        inert={backgroundModeCheck ? true : undefined}
+        aria-hidden={backgroundModeCheck ? true : undefined}
+      >
+        {content}
+      </div>
+      {backgroundModeCheck ? (
+        <ModeRecheckBarrier
+          state={backgroundModeCheck}
+          error={modeError}
+          onRetry={() => setModeCheckGeneration((value) => value + 1)}
+        />
+      ) : null}
+    </>
+  );
+
   if (accountChildren.loading && (!activeContext || onboardingRequired)) {
-    return <LoadingScreen label="Đang tải danh sách con…" />;
+    return preserveVerifiedScreen(<LoadingScreen label="Đang tải danh sách con…" />);
   }
 
   if (onboardingRequired) {
-    return (
+    return preserveVerifiedScreen(
       <EntryModeScreen
         accountName={typeof auth.user.user_metadata?.full_name === 'string' ? auth.user.user_metadata.full_name : 'Phụ huynh'}
         accountEmail={auth.user.email}
@@ -488,7 +581,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
 
   if (!activeContext || childPickerOpen) {
     if (role === 'child') {
-      return (
+      return preserveVerifiedScreen(
         <>
           <main className="app-status-screen">
             <div className="app-status-card">
@@ -507,7 +600,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
       );
     }
 
-    return (
+    return preserveVerifiedScreen(
       <ChildSelectionScreen
         user={auth.user}
         children={accountChildren.children}
@@ -519,10 +612,12 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
     );
   }
 
-  if (familyState.loading && !familyState.data) return <LoadingScreen label="Đang tải dữ liệu của bé…" />;
+  if (familyState.loading && !familyState.data) {
+    return preserveVerifiedScreen(<LoadingScreen label="Đang tải dữ liệu của bé…" />);
+  }
 
   if (!familyState.data) {
-    return (
+    return preserveVerifiedScreen(
       <main className="app-status-screen">
         <div className="app-status-card">
           <h1>Không tải được dữ liệu</h1>
@@ -600,7 +695,9 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
       />
     </>
   );
-  return <Suspense fallback={<LoadingScreen label="Đang mở giao diện…" />}>{application}</Suspense>;
+  return preserveVerifiedScreen(
+    <Suspense fallback={<LoadingScreen label="Đang mở giao diện…" />}>{application}</Suspense>,
+  );
 }
 
 export default function App() {

@@ -2,11 +2,10 @@ import { MaterialIcon } from '../../../components/MaterialIcon';
 import { experienceSummary, milestoneProgress } from '../../../domain/engagement';
 import type { FamilyData } from '../../../lib/familyRepository';
 
-export function ChildRewardsPanel({ data, saving, onRedeem, onOpenMenu }: {
+export function ChildRewardsPanel({ data, saving, onRedeem }: {
   data: FamilyData;
   saving: boolean;
   onRedeem: (milestoneId: string) => Promise<void>;
-  onOpenMenu: () => void;
 }) {
   const experience = experienceSummary(data.child.experience_points, data.settings);
   const milestone = data.milestones.find((item) => ['active', 'unlocked'].includes(item.status));
@@ -15,9 +14,8 @@ export function ChildRewardsPanel({ data, saving, onRedeem, onOpenMenu }: {
 
   return (
     <section className="child-dashboard-panel">
-      <header className="screen-intro screen-intro-with-action">
+      <header className="screen-intro">
         <div><span className="screen-eyebrow">Kho phần thưởng</span><h1>Đổi nỗ lực thành niềm vui</h1><p>XP được cộng trên máy chủ sau khi buổi học được duyệt.</p></div>
-        <button type="button" onClick={onOpenMenu} className="header-icon-button" aria-label="Mở menu tài khoản"><MaterialIcon name="menu" /></button>
       </header>
 
       <article className="experience-hero">

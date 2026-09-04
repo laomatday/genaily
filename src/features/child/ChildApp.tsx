@@ -12,6 +12,7 @@ import { isSelfStudyType } from '../../domain/schedulePolicy';
 import { getDayKey } from '../../lib/date';
 import { breakPolicy, sessionBreakCount } from '../../domain/engagement';
 import { ChildHome } from './screens/ChildHome';
+import { ChildHeader } from './components/ChildHeader';
 import { ChildNav, type ChildTab } from './components/ChildNav';
 import { ChildProgressPanel } from './screens/ChildProgressPanel';
 import { ChildRewardsPanel } from './screens/ChildRewardsPanel';
@@ -215,10 +216,18 @@ export function ChildApp({
 
   return (
     <main className={`app-shell min-h-screen app-background app-text-color ${dashboardVisible ? 'pb-28' : ''}`}>
-      {view === 'today' && <ChildHome data={data} session={currentSession} saving={saving} onStart={onStartSession} onStarted={() => setView(studyLockEnabled ? 'lock' : 'focus')} onOpenMenu={() => setMenuOpen(true)} onMessageParent={onMessageParent} onParentAccess={onSwitchToParent} />}
-      {view === 'week' && <ChildWeekPanel data={data} onOpenMenu={() => setMenuOpen(true)} />}
-      {view === 'rewards' && <ChildRewardsPanel data={data} saving={saving} onRedeem={onRedeemMilestone} onOpenMenu={() => setMenuOpen(true)} />}
-      {view === 'progress' && <ChildProgressPanel data={data} loadingMore={loadingMore} onLoadMore={onLoadMoreSessions} onOpenMenu={() => setMenuOpen(true)} />}
+      {dashboardVisible && (
+        <ChildHeader
+          childName={data.child.full_name}
+          avatarPath={data.child.avatar_url}
+          menuOpen={menuOpen}
+          onOpenMenu={() => setMenuOpen(true)}
+        />
+      )}
+      {view === 'today' && <ChildHome data={data} session={currentSession} saving={saving} onStart={onStartSession} onStarted={() => setView(studyLockEnabled ? 'lock' : 'focus')} onMessageParent={onMessageParent} onParentAccess={onSwitchToParent} />}
+      {view === 'week' && <ChildWeekPanel data={data} />}
+      {view === 'rewards' && <ChildRewardsPanel data={data} saving={saving} onRedeem={onRedeemMilestone} />}
+      {view === 'progress' && <ChildProgressPanel data={data} loadingMore={loadingMore} onLoadMore={onLoadMoreSessions} />}
       {view === 'lock' && currentSession && <StudyLockScreen session={currentSession} command={latestCommand} breakMessage={breakMessage} saving={saving} breakMinutes={breaks.minutes} onFocus={() => setView('focus')} onBreak={() => onRequestBreak(breaks.minutes)} onBreakSent={() => setBreakMessage(`Yêu cầu nghỉ ${breaks.minutes} phút đã được lưu và gửi tới phụ huynh.`)} />}
       {view === 'focus' && currentSession && (
         <FocusScreen

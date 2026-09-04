@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { normalizeGradeLevel } from '../domain/education';
 import { isFamilyContext, isUuid, purgeInvalidFamilyStorage, type FamilyContext } from '../lib/familyIdentity';
+import { uploadChildAvatar } from '../lib/familyRepository.mutations';
 import { supabase } from '../lib/supabase';
 
 export interface AccountChild {
@@ -121,7 +122,11 @@ export function useAccountChildren(user: User | null) {
     };
   }, [refresh]);
 
-  const addChild = useCallback(async (childName: string, gradeLevel: number): Promise<AccountChild> => {
+  const addChild = useCallback(async (
+    childName: string,
+    gradeLevel: number,
+    avatarFile?: File | null,
+  ): Promise<AccountChild> => {
     if (!userId) throw new Error('Bạn cần đăng nhập để thêm hồ sơ trẻ.');
     const name = childName.trim();
     if (name.length < 2 || name.length > 100) throw new Error('Tên bé phải có từ 2 đến 100 ký tự.');
@@ -135,7 +140,7 @@ export function useAccountChildren(user: User | null) {
     if (rpcError) throw new Error(`Không thêm được hồ sơ con: ${rpcError.message}`);
 
     const created = data?.[0];
-    const child: AccountChild = {
+    let child: AccountChild = {
       account_space_id: created?.account_space_id ?? '',
       parent_profile_id: created?.parent_profile_id ?? '',
       child_profile_id: created?.child_profile_id ?? '',
@@ -144,7 +149,22 @@ export function useAccountChildren(user: User | null) {
       child_grade_level: normalizeGradeLevel(created?.child_grade_level) ?? grade,
       child_joined_at: new Date().toISOString(),
     };
-    if (!contextFromAccountChild(child)) throw new Error('Máy chủ trả về hồ sơ con không hợp lệ.');
+    const childContext = contextFromAccountChild(child);
+    if (!childContext) throw new Error('Máy chủ trả về hồ sơ con không hợp lệ.');
+
+    if (avatarFile) {
+      try {
+        const avatarPath = await uploadChildAvatar(childContext, avatarFile);
+        child = { ...child, child_avatar_url: avatarPath };
+      } catch (cause) {
+        await refresh();
+        const detail = cause instanceof Error ? cause.message : 'Lỗi không xác định.';
+        throw new Error(
+          `Hồ sơ đã được tạo nhưng chưa lưu được ảnh: ${detail} Hãy mở Sửa thông tin để thử lại.`,
+          { cause },
+        );
+      }
+    }
 
     saveStoredAccountChildren(userId, [...children, child]);
     const refreshed = await refresh();

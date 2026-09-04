@@ -1,5 +1,6 @@
 import { APP_CONFIG } from '../config/appConfig';
 import { deviceAdapter } from '../domain/adapters';
+import { validateChildAvatarFile } from '../domain/childAvatarPolicy';
 import { parseSmartWeekOutput } from '../domain/plannerService';
 import { normalizeScheduleOrder, validateScheduleSetup } from '../domain/schedulePolicy';
 import { assertTransition } from '../domain/stateMachine';
@@ -17,6 +18,7 @@ import type {
   ServerAppMode,
 } from './familyRepository.types';
 import { supabase } from './supabase';
+import { createRandomUuid } from './randomId';
 
 export async function updateChildProfile(ctx: FamilyContext, childName: string, gradeLevel: number): Promise<void> {
   assertValidContext(ctx);
@@ -29,11 +31,6 @@ export async function updateChildProfile(ctx: FamilyContext, childName: string, 
 }
 
 const CHILD_AVATAR_BUCKET = 'child-avatars';
-const CHILD_AVATAR_TYPES = new Map([
-  ['image/jpeg', 'jpg'],
-  ['image/png', 'png'],
-  ['image/webp', 'webp'],
-]);
 
 function isOwnedChildAvatarPath(ctx: FamilyContext, path: string | null): path is string {
   return Boolean(path?.startsWith(`${ctx.familyId}/${ctx.childProfileId}/`));
@@ -51,16 +48,12 @@ export async function getChildAvatarSignedUrl(path: string): Promise<string> {
 
 export async function uploadChildAvatar(ctx: FamilyContext, file: File): Promise<string> {
   assertValidContext(ctx);
-  const extension = CHILD_AVATAR_TYPES.get(file.type);
-  if (!extension) throw new Error('Ảnh đại diện phải là JPEG, PNG hoặc WebP.');
-  if (file.size <= 0 || file.size > APP_CONFIG.childAvatarMaxBytes) {
-    throw new Error(`Ảnh đại diện không được vượt quá ${Math.round(APP_CONFIG.childAvatarMaxBytes / 1024 / 1024)} MB.`);
-  }
+  const { contentType, extension } = validateChildAvatarFile(file);
 
-  const path = `${ctx.familyId}/${ctx.childProfileId}/${crypto.randomUUID()}.${extension}`;
+  const path = `${ctx.familyId}/${ctx.childProfileId}/${createRandomUuid()}.${extension}`;
   const upload = await supabase.storage
     .from(CHILD_AVATAR_BUCKET)
-    .upload(path, file, { contentType: file.type, upsert: false });
+    .upload(path, file, { contentType, upsert: false });
   throwIfSupabaseError(upload.error, 'Không tải được ảnh đại diện');
 
   const update = await supabase.rpc('update_child_avatar', {
@@ -286,7 +279,7 @@ export async function uploadSessionEvidence(
   if (!allowed.includes(file.type)) throw new Error('Ảnh phải là JPEG, PNG hoặc WebP.');
   if (file.size > APP_CONFIG.evidenceMaxBytes) throw new Error('Ảnh vượt quá dung lượng cho phép.');
   const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg';
-  const path = `${ctx.familyId}/${sessionId}/${crypto.randomUUID()}.${extension}`;
+  const path = `${ctx.familyId}/${sessionId}/${createRandomUuid()}.${extension}`;
   const uploadResult = await supabase.storage
     .from('learning-evidence').upload(path, file, { contentType: file.type, upsert: false });
   throwIfSupabaseError(uploadResult.error, 'Không tải được ảnh minh chứng');

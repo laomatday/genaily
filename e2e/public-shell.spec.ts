@@ -152,3 +152,104 @@ test('bottom navigation stays icon-only, touch-friendly and accessible at 320px'
     expect(accessibility.violations).toEqual([]);
   }
 });
+
+test('parent header stays touch-friendly and collision-free at 320px', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/e2e/fixtures/ui-regression.html?view=parent-header');
+
+  const header = page.locator('.parent-compact-header');
+  const childButton = page.getByRole('button', { name: /Quản lý hồ sơ của Minh Triết/ });
+  const notificationButton = page.getByRole('button', { name: 'Thông báo, 12 chưa đọc' });
+  const accountButton = page.getByRole('button', { name: 'Mở menu tài khoản của Nguyễn Phụ huynh' });
+
+  await expect(header).toBeVisible();
+  await expect(childButton).not.toContainText('Lớp');
+  await expect(header.locator('.parent-notification-badge')).toHaveText('9+');
+
+  for (const button of [childButton, notificationButton, accountButton]) {
+    const box = await button.boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+
+  const [childBox, notificationBox] = await Promise.all([
+    childButton.boundingBox(),
+    notificationButton.boundingBox(),
+  ]);
+  expect((childBox?.x ?? 0) + (childBox?.width ?? 0))
+    .toBeLessThanOrEqual((notificationBox?.x ?? 0) + 1);
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  )).toBe(false);
+
+  const copyOverflow = await header.locator('.parent-child-copy b').evaluate((element) => {
+    const style = window.getComputedStyle(element);
+    return { overflow: style.overflow, textOverflow: style.textOverflow };
+  });
+  expect(copyOverflow).toEqual({ overflow: 'hidden', textOverflow: 'ellipsis' });
+
+  const initialHeaderY = (await header.boundingBox())?.y;
+  expect(await header.evaluate((element) => window.getComputedStyle(element).position)).toBe('sticky');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect((await header.boundingBox())?.y).toBeCloseTo(initialHeaderY ?? 0, 0);
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  )).toBe(false);
+
+  const lightAccessibility = await new AxeBuilder({ page })
+    .include('.parent-compact-header')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(lightAccessibility.violations).toEqual([]);
+
+  await page.locator('html').evaluate((element) => element.setAttribute('data-theme', 'dark'));
+  const darkAccessibility = await new AxeBuilder({ page })
+    .include('.parent-compact-header')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(darkAccessibility.violations).toEqual([]);
+});
+
+test('child header shows the saved avatar and name only, then stays fixed while scrolling', async ({ page }) => {
+  await page.route('https://example.test/child-avatar.svg', async (route) => {
+    await route.fulfill({
+      contentType: 'image/svg+xml',
+      body: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="16" fill="#7c6ce7"/></svg>',
+    });
+  });
+  await page.setViewportSize({ width: 320, height: 568 });
+  await page.goto('/e2e/fixtures/ui-regression.html?view=child-header');
+
+  const header = page.locator('.child-app-header');
+  const avatar = page.getByRole('img', { name: 'Ảnh đại diện của Minh Triết' });
+  const menuButton = page.getByRole('button', { name: 'Mở menu tài khoản của Minh Triết' });
+
+  await expect(header).toBeVisible();
+  await expect(header).toHaveAttribute('aria-label', 'Thanh điều khiển của bé');
+  await expect(header.locator('.child-header-copy')).toHaveText('Minh Triết');
+  await expect(header).not.toContainText('Lớp');
+  await expect(header).not.toContainText('Tasks Learning');
+  await expect(avatar).toHaveAttribute('src', 'https://example.test/child-avatar.svg');
+  await expect.poll(() => avatar.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
+
+  const menuBox = await menuButton.boundingBox();
+  expect(menuBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+  expect(menuBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await menuButton.click();
+  await expect(page.locator('html')).toHaveAttribute('data-fixture-selection', 'child-menu');
+
+  const initialHeaderY = (await header.boundingBox())?.y;
+  expect(await header.evaluate((element) => window.getComputedStyle(element).position)).toBe('sticky');
+  await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+  expect((await header.boundingBox())?.y).toBeCloseTo(initialHeaderY ?? 0, 0);
+  expect(await page.evaluate(
+    () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+  )).toBe(false);
+
+  const accessibility = await new AxeBuilder({ page })
+    .include('.child-app-header')
+    .withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa'])
+    .analyze();
+  expect(accessibility.violations).toEqual([]);
+});

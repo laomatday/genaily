@@ -1,6 +1,7 @@
 import { useState, useMemo, type ReactNode } from 'react';
 import { AppDropdown } from '../../../components/AppDropdown';
 import { MaterialIcon } from '../../../components/MaterialIcon';
+import { createRandomUuid } from '../../../lib/randomId';
 import { isLearningActivityType, isSelfStudyType } from '../../../domain/schedulePolicy';
 import { DAY_KEYS, DAY_SHORT_VI, getDayKey } from '../../../lib/date';
 import type { FamilyData, ScheduleSetupItem } from '../../../lib/familyRepository';
@@ -58,7 +59,7 @@ export function ScheduleSetupPanel({ data, saving, error, onBack, onSave }: Sche
   };
 
   const addActivity = () => {
-    const key = crypto.randomUUID();
+    const key = createRandomUuid();
     const goal = data.goals.find(
       (item) => item.status === 'active' && !drafts.some((draft) => draft.subject === item.subject)
     );

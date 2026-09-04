@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { User } from '@supabase/supabase-js';
 import {
@@ -19,6 +19,7 @@ const state = vi.hoisted(() => ({
   getServerAppMode: vi.fn(),
   getAppOnboardingStatus: vi.fn(),
   signOut: vi.fn(),
+  updateProfile: vi.fn(),
 }));
 
 const parentId = '10000000-0000-4000-8000-000000000001';
@@ -112,7 +113,7 @@ vi.mock('./hooks/useFamilyData', () => ({
       saveMilestone: vi.fn(),
       createDevicePairing: vi.fn(),
       revokeDevice: vi.fn(),
-      updateProfile: vi.fn(),
+      updateProfile: state.updateProfile,
       clearAllData: vi.fn(),
       startSession: vi.fn(),
       requestBreak: vi.fn(),
@@ -132,18 +133,45 @@ vi.mock('./lib/familyRepository', () => ({
   getServerAppMode: state.getServerAppMode,
 }));
 
-vi.mock('./features/parent/ParentDashboard', () => ({
+vi.mock('./features/parent/ParentDashboard', async () => {
+  const { ChildProfileSheet } = await import('./components/ChildProfileSheet');
+  return {
   ParentDashboard: ({
     accountEmail,
+    children: managedChildren,
     selectedChildId,
+    saving,
+    onUpdateProfile,
+    onAddChild,
+    onSelectChild,
   }: {
     accountEmail: string | undefined;
+    children: typeof children;
     selectedChildId: string;
+    saving: boolean;
+    onUpdateProfile: (childName: string, gradeLevel: number, avatarFile?: File | null, removeAvatar?: boolean) => Promise<void>;
+    onAddChild: (childName: string, gradeLevel: number, avatarFile?: File | null) => Promise<(typeof children)[number]>;
+    onSelectChild: (child: (typeof children)[number]) => void;
   }) => {
     state.parentRenders.push({ accountEmail, selectedChildId });
-    return <div data-testid="selected-child-id">{selectedChildId}</div>;
+    return (
+      <div>
+        <div data-testid="selected-child-id">{selectedChildId}</div>
+        <ChildProfileSheet
+          open
+          children={managedChildren}
+          selectedChildId={selectedChildId}
+          saving={saving}
+          onClose={vi.fn()}
+          onSelect={onSelectChild}
+          onRename={onUpdateProfile}
+          onAdd={onAddChild}
+        />
+      </div>
+    );
   },
-}));
+  };
+});
 
 vi.mock('./features/child/ChildApp', () => ({
   ChildApp: () => <div>Child app</div>,
@@ -162,6 +190,7 @@ beforeEach(() => {
   });
   state.getAppOnboardingStatus.mockReset().mockResolvedValue(true);
   state.signOut.mockReset().mockResolvedValue(undefined);
+  state.updateProfile.mockReset().mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -176,11 +205,6 @@ describe('App selected child restoration', () => {
       getDeviceSetupStorageKey(parentId),
       serializeDeviceSetup(parentId, 'parent'),
     );
-    vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
-      callback(0);
-      return 1;
-    });
-
     const view = render(<App />);
     expect(screen.getByText('Đang kiểm tra đăng nhập…')).toBeTruthy();
 
@@ -206,6 +230,69 @@ describe('App selected child restoration', () => {
       expect(screen.getByTestId('selected-child-id').textContent).toBe(secondChildId);
     });
     expect(state.contextIds).not.toContain(firstChildId);
+  });
+
+  it('keeps an avatar File draft mounted while focus triggers a mode recheck', async () => {
+    Object.defineProperty(URL, 'createObjectURL', {
+      configurable: true,
+      value: vi.fn(() => 'blob:avatar-app-preview'),
+    });
+    Object.defineProperty(URL, 'revokeObjectURL', { configurable: true, value: vi.fn() });
+    persistFamilyContext(parentId, secondContext);
+    localStorage.setItem(
+      getDeviceSetupStorageKey(parentId),
+      serializeDeviceSetup(parentId, 'parent'),
+    );
+    state.authUser = {
+      id: parentId,
+      email: 'parent@example.test',
+      user_metadata: { full_name: 'Phụ huynh' },
+    } as unknown as User;
+    state.authLoading = false;
+
+    render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-child-id').textContent).toBe(secondChildId);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Sửa thông tin' }));
+    const avatarFile = new File(['avatar'], 'minh.png', { type: 'image/png' });
+    const avatarInput = document.querySelector<HTMLInputElement>('input[type="file"]');
+    expect(avatarInput).toBeTruthy();
+    fireEvent.change(avatarInput!, {
+      target: { files: [avatarFile] },
+    });
+    expect(document.querySelector<HTMLImageElement>('img[src="blob:avatar-app-preview"]')).toBeTruthy();
+
+    let rejectRecheck!: (reason: Error) => void;
+    state.getServerAppMode.mockImplementationOnce(() => new Promise((_resolve, reject) => {
+      rejectRecheck = reject;
+    }));
+
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(state.getServerAppMode).toHaveBeenCalledTimes(2));
+
+    expect(screen.getByTestId('selected-child-id').textContent).toBe(secondChildId);
+    expect(document.querySelector<HTMLImageElement>('img[src="blob:avatar-app-preview"]')).toBeTruthy();
+    expect(screen.getByText('Đang xác minh quyền truy cập')).toBeTruthy();
+
+    await act(async () => rejectRecheck(new Error('Mất kết nối kiểm thử')));
+    expect(await screen.findByRole('alertdialog')).toBeTruthy();
+    expect(screen.getByText('Mất kết nối kiểm thử')).toBeTruthy();
+    expect(document.querySelector<HTMLImageElement>('img[src="blob:avatar-app-preview"]')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Thử lại' }));
+    await waitFor(() => expect(state.getServerAppMode).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(document.querySelector<HTMLImageElement>('img[src="blob:avatar-app-preview"]')).toBeTruthy();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Lưu thông tin' }));
+    await waitFor(() => {
+      expect(state.updateProfile).toHaveBeenCalledWith('Bé Hai', 5, avatarFile, false);
+    });
   });
 
   it('remounts account state before rendering a direct auth switch from A to B', async () => {

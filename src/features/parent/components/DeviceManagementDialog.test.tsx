@@ -25,7 +25,7 @@ describe('DeviceManagementDialog integration', () => {
     const onCreate = vi.fn().mockResolvedValue({
       deviceId: 'device-1',
       pairingCode: 'ABCDEF0123456789',
-      expiresAt: '2026-09-04T10:10:00.000Z',
+      expiresAt: '2099-09-04T10:10:00.000Z',
     });
     render(
       <DeviceManagementDialog

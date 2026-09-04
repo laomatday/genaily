@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { AppLogo } from '../../../components/AppLogo';
 import { MaterialIcon } from '../../../components/MaterialIcon';
 import { ScheduleList } from '../../../components/ScheduleList';
 import { learningStreak } from '../../../domain/progressMetrics';
@@ -15,12 +14,11 @@ interface ChildHomeProps {
   saving: boolean;
   onStart: () => Promise<void>;
   onStarted: () => void;
-  onOpenMenu: () => void;
   onMessageParent: (message: string) => Promise<void>;
   onParentAccess: () => void;
 }
 
-export function ChildHome({ data, session, saving, onStart, onStarted, onOpenMenu, onMessageParent, onParentAccess }: ChildHomeProps) {
+export function ChildHome({ data, session, saving, onStart, onStarted, onMessageParent, onParentAccess }: ChildHomeProps) {
   const childName = data.child.full_name || 'Bé';
   const todayKey = formatLocalDateKey();
   const events = data.schedule
@@ -48,16 +46,6 @@ export function ChildHome({ data, session, saving, onStart, onStarted, onOpenMen
 
   return (
     <section className="child-dashboard-panel">
-      <header className="child-dashboard-header child-compact-header">
-        <div className="child-brand-lockup">
-          <AppLogo />
-          <div><b>{childName}</b><small>Lớp {data.child.grade_level ?? '—'} · Tasks Learning</small></div>
-        </div>
-        <button type="button" onClick={onOpenMenu} className="header-icon-button" aria-label="Mở menu tài khoản">
-          <MaterialIcon name="menu" />
-        </button>
-      </header>
-
       <div className="child-quick-stats">
         <span><MaterialIcon name="local_fire_department" />{learningStreak(data.sessions)} ngày</span>
         <span><MaterialIcon name="stars" />{experience.points.toLocaleString('vi-VN')} XP</span>
@@ -66,7 +54,7 @@ export function ChildHome({ data, session, saving, onStart, onStarted, onOpenMen
 
       <article className="child-momentum-card">
         <div className="child-momentum-heading">
-          <div><span className="screen-eyebrow"><MaterialIcon name="rocket_launch" />Hành trình ngày mới</span><b>Chào {formatTodayLabel().toLowerCase()}, {childName}!</b></div>
+          <div><span className="screen-eyebrow"><MaterialIcon name="rocket_launch" />Hành trình ngày mới</span><h1>Chào {formatTodayLabel().toLowerCase()}, {childName}!</h1></div>
           <strong>Cấp {experience.level}</strong>
         </div>
         <div className="milestone-progress-copy"><span>Tiến độ lên Cấp {experience.level + 1}</span><b>{experience.pointsInLevel}/{experience.levelSize} XP</b></div>
