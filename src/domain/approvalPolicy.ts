@@ -1,4 +1,5 @@
 import type { ApprovalPolicy } from '../types';
+import { PRODUCT_POLICY } from '../config/productPolicy';
 
 export interface ApprovalFacts {
   policy: ApprovalPolicy;
@@ -16,7 +17,7 @@ export type ApprovalDecision =
 export function resolveApprovalPolicy(facts: ApprovalFacts): ApprovalDecision {
   const tasksComplete = facts.tasksTotal > 0 && facts.tasksDone === facts.tasksTotal;
   const quickCheckPassed = facts.quickCheckTotal === 0
-    || facts.quickCheckScore / facts.quickCheckTotal >= 0.8;
+    || facts.quickCheckScore / facts.quickCheckTotal >= PRODUCT_POLICY.quickCheckPassRatio;
 
   if (!tasksComplete || !quickCheckPassed) {
     return { status: 'awaiting_parent', reason: 'incomplete' };

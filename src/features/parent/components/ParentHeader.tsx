@@ -56,7 +56,7 @@ export function ParentHeader({
             <button
               type="button"
               onClick={onShowNotifications}
-              className={`parent-notification-button ${notificationsOpen ? 'is-active' : ''}`}
+              className={`header-action-control parent-notification-button ${notificationsOpen ? 'is-active' : ''}`}
               title="Thông báo"
               aria-label={notificationLabel}
               aria-haspopup="dialog"
@@ -72,7 +72,7 @@ export function ParentHeader({
             <button
               type="button"
               onClick={onOpenMenu}
-              className={`parent-avatar-button ${menuOpen ? 'is-active' : ''}`}
+              className={`header-action-control parent-avatar-button ${menuOpen ? 'is-active' : ''}`}
               title="Mở menu"
               aria-label={`Mở menu tài khoản của ${parentName || 'phụ huynh'}`}
               aria-haspopup="dialog"

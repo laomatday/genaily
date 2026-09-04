@@ -21,6 +21,7 @@ import { UnlockedScreen, WaitingScreen } from './screens/CompletionScreens';
 import { EvidenceScreen } from './screens/EvidenceScreen';
 import { FocusScreen } from './screens/FocusScreen';
 import { StudyLockScreen } from './screens/StudyLockScreen';
+import { resolveStudyLockState } from './studyLockState';
 
 type ChildView = ChildTab | 'lock' | 'focus' | 'evidence' | 'waiting' | 'unlocked';
 
@@ -147,6 +148,7 @@ export function ChildApp({
   const latestCommand = currentSession
     ? data.deviceCommands.find((command) => command.session_id === currentSession.id)
     : undefined;
+  const lockState = resolveStudyLockState(studyLockEnabled, latestCommand?.status);
   const elapsedMinutes = Math.max(1, Math.round((plannedMinutes * 60 - remainingSeconds) / 60));
   const breaks = breakPolicy(data.settings);
   const usedBreaks = currentSession ? sessionBreakCount(data.sessionEvents, currentSession.id) : 0;
@@ -210,7 +212,9 @@ export function ChildApp({
         answers: [],
       });
     } catch (cause) {
-      setValidationError(cause instanceof Error ? cause.message : 'Không hoàn tất được buổi học.');
+      const message = cause instanceof Error ? cause.message : 'Không hoàn tất được buổi học.';
+      setValidationError(message);
+      throw cause instanceof Error ? cause : new Error(message);
     }
   };
 
@@ -228,7 +232,7 @@ export function ChildApp({
       {view === 'week' && <ChildWeekPanel data={data} />}
       {view === 'rewards' && <ChildRewardsPanel data={data} saving={saving} onRedeem={onRedeemMilestone} />}
       {view === 'progress' && <ChildProgressPanel data={data} loadingMore={loadingMore} onLoadMore={onLoadMoreSessions} />}
-      {view === 'lock' && currentSession && <StudyLockScreen session={currentSession} command={latestCommand} breakMessage={breakMessage} saving={saving} breakMinutes={breaks.minutes} onFocus={() => setView('focus')} onBreak={() => onRequestBreak(breaks.minutes)} onBreakSent={() => setBreakMessage(`Yêu cầu nghỉ ${breaks.minutes} phút đã được lưu và gửi tới phụ huynh.`)} />}
+      {view === 'lock' && currentSession && <StudyLockScreen session={currentSession} command={latestCommand} breakMessage={breakMessage} saving={saving} breakMinutes={breaks.minutes} studyLockEnabled={studyLockEnabled} onFocus={() => setView('focus')} onBreak={() => onRequestBreak(breaks.minutes)} onBreakSent={() => setBreakMessage(`Yêu cầu nghỉ ${breaks.minutes} phút đã được lưu và gửi tới phụ huynh.`)} />}
       {view === 'focus' && currentSession && (
         <FocusScreen
           session={currentSession}
@@ -241,7 +245,8 @@ export function ChildApp({
           usedBreaks={usedBreaks}
           maxBreaks={breaks.maxBreaks}
           note={currentSession.child_note ?? ''}
-          onComplete={() => void handleFocusComplete()}
+          lockState={lockState}
+          onComplete={handleFocusComplete}
           onBreak={() => onRequestBreak(breaks.minutes)}
           onBreakSent={() => setBreakMessage(`Yêu cầu nghỉ ${breaks.minutes} phút đã được lưu và gửi tới phụ huynh.`)}
           onSaveNote={onSaveNote}

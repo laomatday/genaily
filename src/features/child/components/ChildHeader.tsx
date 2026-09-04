@@ -30,7 +30,7 @@ export function ChildHeader({
       </div>
       <button
         type="button"
-        className={`header-icon-button child-header-menu ${menuOpen ? 'is-active' : ''}`}
+        className={`header-icon-button header-action-control child-header-menu ${menuOpen ? 'is-active' : ''}`}
         onClick={onOpenMenu}
         aria-label={`Mở menu tài khoản của ${displayName}`}
         aria-haspopup="dialog"

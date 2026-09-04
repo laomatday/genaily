@@ -5,10 +5,14 @@ import { MaterialIcon } from '../../src/components/MaterialIcon';
 import { ParentGate } from '../../src/components/ParentGate';
 import { ChildHeader } from '../../src/features/child/components/ChildHeader';
 import { ChildNav, type ChildTab } from '../../src/features/child/components/ChildNav';
+import { ChildHome } from '../../src/features/child/screens/ChildHome';
 import { ParentHeader } from '../../src/features/parent/components/ParentHeader';
 import { ParentNav, type ParentTab } from '../../src/features/parent/components/ParentNav';
+import { ScheduleSetupPanel } from '../../src/features/parent/components/ScheduleSetupPanel';
 import { ThemeProvider } from '../../src/hooks/useTheme';
 import type { AccountChild } from '../../src/hooks/useAccountChildren';
+import { DAY_KEYS } from '../../src/lib/date';
+import type { FamilyData } from '../../src/lib/familyRepository';
 import '../../src/style.css';
 
 const child: AccountChild = {
@@ -38,6 +42,57 @@ const children: AccountChild[] = [
     child_grade_level: 7,
   },
 ];
+
+const scheduleSetupData = {
+  parent: {
+    id: '10000000-0000-4000-8000-000000000002',
+    full_name: 'Nguyễn Phụ huynh',
+    avatar_url: null,
+    role: 'parent',
+    grade_level: null,
+    experience_points: 0,
+  },
+  child: {
+    id: child.child_profile_id,
+    full_name: 'Khôi',
+    avatar_url: null,
+    role: 'child',
+    grade_level: 9,
+    experience_points: 0,
+  },
+  goals: [],
+  schedule: DAY_KEYS.map((day, index) => ({
+    id: `10000000-0000-4000-8000-${String(index + 101).padStart(12, '0')}`,
+    family_id: child.account_space_id,
+    child_profile_id: child.child_profile_id,
+    title: 'Bóng rổ',
+    subject: null,
+    day_of_week: day,
+    start_time: '17:30:00',
+    duration_minutes: 60,
+    event_type: 'sport',
+    status: 'upcoming',
+    sort_order: index,
+    study_lock_enabled: false,
+    created_at: '2026-09-04T00:00:00.000Z',
+    updated_at: '2026-09-04T00:00:00.000Z',
+  })),
+  subjectSuggestions: [],
+} as FamilyData;
+
+const childHomeData = {
+  ...scheduleSetupData,
+  child: {
+    ...scheduleSetupData.child,
+    full_name: 'Khôi có tên hồ sơ rất dài',
+    experience_points: 11_250,
+  },
+  sessions: [],
+  occurrences: [],
+  tasks: [],
+  settings: null,
+  milestones: [],
+} as FamilyData;
 
 function recordSelection(value: string): Promise<void> {
   document.documentElement.dataset.fixtureSelection = value;
@@ -129,6 +184,35 @@ export function UiRegressionFixture() {
           onOpenMenu={() => void recordSelection('child-menu')}
         />
         <ScrollFixtureContent label="Nhiệm vụ của bé" />
+      </main>
+    );
+  }
+
+  if (view === 'schedule-setup') {
+    return (
+      <main className="app-shell min-h-screen app-background p-4 app-text-color">
+        <ScheduleSetupPanel
+          data={scheduleSetupData}
+          saving={false}
+          error={null}
+          onBack={() => undefined}
+          onSave={() => Promise.resolve()}
+        />
+      </main>
+    );
+  }
+
+  if (view === 'child-home') {
+    return (
+      <main className="app-shell min-h-screen app-background app-text-color">
+        <ChildHome
+          data={childHomeData}
+          saving={false}
+          onStart={() => Promise.resolve()}
+          onStarted={() => undefined}
+          onMessageParent={() => Promise.resolve()}
+          onParentAccess={() => undefined}
+        />
       </main>
     );
   }

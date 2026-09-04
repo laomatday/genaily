@@ -7,6 +7,7 @@ import { getActivityDetail } from '../../../domain/schedulePolicy';
 import { formatLocalDateKey, formatTodayLabel, getDayKey } from '../../../lib/date';
 import { useDialogFocusTrap } from '../../../hooks/useDialogFocusTrap';
 import type { FamilyData, LearningSessionRow } from '../../../lib/familyRepository';
+import { ChildActionFeedback, childActionError } from '../components/ChildActionFeedback';
 
 interface ChildHomeProps {
   data: FamilyData;
@@ -43,6 +44,17 @@ export function ChildHome({ data, session, saving, onStart, onStarted, onMessage
   const experience = experienceSummary(data.child.experience_points, data.settings);
   const milestone = data.milestones.find((item) => ['active', 'unlocked'].includes(item.status));
   const [messageOpen, setMessageOpen] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  const startSession = async () => {
+    setActionError(null);
+    try {
+      await onStart();
+      onStarted();
+    } catch (cause) {
+      setActionError(childActionError(cause, 'Chưa bắt đầu được buổi học. Hãy thử lại.'));
+    }
+  };
 
   return (
     <section className="child-dashboard-panel">
@@ -80,7 +92,7 @@ export function ChildHome({ data, session, saving, onStart, onStarted, onMessage
           <button
             type="button"
             disabled={saving || !canStart}
-            onClick={() => void onStart().then(onStarted).catch(() => undefined)}
+            onClick={() => void startSession()}
             className="child-start-button"
           >
             <MaterialIcon name="school" />
@@ -93,6 +105,8 @@ export function ChildHome({ data, session, saving, onStart, onStarted, onMessage
           <div><b>Chưa có buổi học cần bắt đầu</b><p>Con xem lịch bên dưới để chuẩn bị cho hoạt động tiếp theo nhé.</p></div>
         </div>
       )}
+
+      <ChildActionFeedback message={actionError} />
 
       <section className="dashboard-section" aria-labelledby="child-today-schedule">
         <div className="section-heading-row">
@@ -121,7 +135,17 @@ function ContactParentDialog({ open, saving, onSend, onClose }: {
   onClose: () => void;
 }) {
   const [message, setMessage] = useState('Con cần ba/mẹ hỗ trợ.');
+  const [sendError, setSendError] = useState<string | null>(null);
   const dialogRef = useDialogFocusTrap<HTMLDivElement>(open, onClose);
+  const sendMessage = async () => {
+    setSendError(null);
+    try {
+      await onSend(message);
+      onClose();
+    } catch (cause) {
+      setSendError(childActionError(cause, 'Chưa gửi được tin nhắn. Hãy thử lại.'));
+    }
+  };
   if (!open) return null;
   return (
     <div className="app-modal-layer" role="presentation">
@@ -135,7 +159,8 @@ function ContactParentDialog({ open, saving, onSend, onClose }: {
           <label className="app-field-label">Con muốn nhắn gì?
             <textarea className="gemini-control milestone-description-input" maxLength={500} value={message} onChange={(event) => setMessage(event.target.value)} autoFocus />
           </label>
-          <button type="button" className="primary-action modal-submit-button" disabled={saving || !message.trim()} onClick={() => void onSend(message).then(onClose).catch(() => undefined)}>
+          <ChildActionFeedback message={sendError} />
+          <button type="button" className="primary-action modal-submit-button" disabled={saving || !message.trim()} onClick={() => void sendMessage()}>
             {saving ? 'Đang gửi…' : 'Gửi cho ba/mẹ'}
           </button>
         </div>

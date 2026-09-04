@@ -210,6 +210,181 @@ test('parent header stays touch-friendly and collision-free at 320px', async ({ 
   expect(darkAccessibility.violations).toEqual([]);
 });
 
+test('schedule activity editor stays inside narrow mobile viewports', async ({ page }) => {
+  for (const width of [320, 338, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/e2e/fixtures/ui-regression.html?view=schedule-setup');
+
+    await expect(page.getByRole('heading', { name: 'Lịch hoạt động của Khôi' })).toBeVisible();
+    const toolbar = page.locator('.schedule-list-toolbar');
+    const toolbarTitle = toolbar.locator('.schedule-list-heading');
+    const addButton = page.locator('.schedule-list-add-button');
+    const addButtonCopy = addButton.locator('span').last();
+    const previewToggle = page.locator('.schedule-preview-toggle');
+    const saveDock = page.locator('.schedule-save-dock');
+    const saveButton = page.locator('.schedule-save-button');
+    await expect(previewToggle).toHaveAttribute('aria-expanded', 'false');
+    await previewToggle.click();
+    await expect(previewToggle).toHaveAttribute('aria-expanded', 'true');
+    const previewDayGrid = page.locator('.schedule-week-day-grid');
+    const previewDayOptions = previewDayGrid.locator('.schedule-week-day-option');
+    const previewEventRow = page.locator('.schedule-week-event-row').first();
+    await expect(toolbar).toBeVisible();
+    await expect(addButton).toBeVisible();
+    await expect(saveDock).toBeVisible();
+    await expect(saveButton).toBeDisabled();
+    const disabledSaveAppearance = await saveButton.evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return { backgroundColor: style.backgroundColor, opacity: style.opacity };
+    });
+    expect(disabledSaveAppearance.opacity).toBe('1');
+    expect(disabledSaveAppearance.backgroundColor).not.toBe('rgba(0, 0, 0, 0)');
+    await expect(previewDayOptions).toHaveCount(7);
+    await expect(previewEventRow).toBeVisible();
+
+    const [toolbarBox, toolbarTitleBox, addButtonBox] = await Promise.all([
+      toolbar.boundingBox(),
+      toolbarTitle.boundingBox(),
+      addButton.boundingBox(),
+    ]);
+    expect(addButtonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(addButtonBox?.x ?? -1).toBeGreaterThanOrEqual(toolbarBox?.x ?? 0);
+    expect((addButtonBox?.x ?? 0) + (addButtonBox?.width ?? 0))
+      .toBeLessThanOrEqual((toolbarBox?.x ?? 0) + (toolbarBox?.width ?? width) + 1);
+    expect((toolbarTitleBox?.y ?? 0) + (toolbarTitleBox?.height ?? 0))
+      .toBeLessThanOrEqual((addButtonBox?.y ?? 0) + 1);
+    expect(await addButtonCopy.evaluate((element) => {
+      const range = document.createRange();
+      range.selectNodeContents(element);
+      return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+    })).toBe(1);
+
+    for (const option of await previewDayOptions.all()) {
+      const optionBox = await option.boundingBox();
+      expect(optionBox?.width ?? 0).toBeGreaterThanOrEqual(44);
+      expect(optionBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    }
+
+    const previewMain = previewEventRow.locator('.schedule-week-event-main');
+    const previewTime = previewEventRow.locator('.schedule-week-event-time');
+    const [previewMainBox, previewTimeBox] = await Promise.all([
+      previewMain.boundingBox(),
+      previewTime.boundingBox(),
+    ]);
+    expect((previewMainBox?.x ?? 0) + (previewMainBox?.width ?? 0))
+      .toBeLessThanOrEqual((previewTimeBox?.x ?? width) + 1);
+
+    await addButton.click();
+    await expect(page.locator('.schedule-draft-card')).toHaveCount(2);
+    await expect(saveButton).toBeEnabled();
+    const card = page.locator('.schedule-draft-card.is-active');
+    const editor = card.locator('.schedule-draft-editor');
+    const categoryGrid = page.locator('.activity-category-grid');
+    const repeatDayGrid = page.locator('.schedule-repeat-day-grid');
+    const timeGrid = page.locator('.schedule-time-grid');
+    await expect(card).toBeVisible();
+    await expect(card).toContainText('Hoạt động mới');
+    await expect(card.locator('.schedule-editor-section')).toHaveCount(3);
+    await expect(page.getByLabel('Tên môn học khác')).toBeVisible();
+    await expect(categoryGrid.locator('.activity-category-option')).toHaveCount(8);
+    await expect(repeatDayGrid.locator('.schedule-repeat-day-option')).toHaveCount(7);
+
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )).toBe(false);
+    expect(await card.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
+    expect(await editor.evaluate((element) => window.getComputedStyle(element).borderBottomLeftRadius)).not.toBe('0px');
+
+    const [dockBox, saveButtonBox] = await Promise.all([
+      saveDock.boundingBox(),
+      saveButton.boundingBox(),
+    ]);
+    const dockAppearance = await saveDock.evaluate((element) => {
+      const style = window.getComputedStyle(element);
+      return {
+        backgroundColor: style.backgroundColor,
+        borderTopWidth: style.borderTopWidth,
+      };
+    });
+    expect(dockAppearance.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+    expect(dockAppearance.borderTopWidth).toBe('0px');
+    expect(dockBox?.x ?? -1).toBeGreaterThanOrEqual(0);
+    expect((dockBox?.x ?? 0) + (dockBox?.width ?? 0)).toBeLessThanOrEqual(width);
+    expect((dockBox?.y ?? 0) + (dockBox?.height ?? 0)).toBeLessThanOrEqual(844);
+    expect(saveButtonBox?.height ?? 0).toBeGreaterThanOrEqual(48);
+
+    for (const region of [categoryGrid, repeatDayGrid, timeGrid]) {
+      await region.scrollIntoViewIfNeeded();
+      const [regionBox, cardBox] = await Promise.all([region.boundingBox(), card.boundingBox()]);
+      expect(regionBox?.x ?? -1).toBeGreaterThanOrEqual((cardBox?.x ?? 0) - 1);
+      expect((regionBox?.x ?? 0) + (regionBox?.width ?? 0))
+        .toBeLessThanOrEqual((cardBox?.x ?? 0) + (cardBox?.width ?? width) + 1);
+    }
+
+    const categoryColumns = await categoryGrid.evaluate(
+      (element) => window.getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    );
+    expect(categoryColumns).toBe(width <= 360 ? 3 : 4);
+
+    const repeatDayColumns = await repeatDayGrid.evaluate(
+      (element) => window.getComputedStyle(element).gridTemplateColumns.split(' ').length,
+    );
+    expect(repeatDayColumns).toBe(4);
+
+    const categoryOptionBox = await categoryGrid.locator('.activity-category-option').first().boundingBox();
+    const repeatDayBox = await repeatDayGrid.locator('.schedule-repeat-day-option').first().boundingBox();
+    const deleteButtonBox = await card.locator('.schedule-editor-delete').boundingBox();
+    const doneButtonBox = await card.locator('.schedule-editor-done').boundingBox();
+    expect(categoryOptionBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(repeatDayBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(deleteButtonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(doneButtonBox?.height ?? 0).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('child momentum card keeps greeting, level and XP aligned on narrow screens', async ({ page }) => {
+  for (const width of [320, 338, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto('/e2e/fixtures/ui-regression.html?view=child-home');
+
+    const card = page.locator('.child-momentum-card');
+    const heading = card.locator('.child-momentum-heading');
+    const headingCopy = heading.locator(':scope > div');
+    const level = heading.locator(':scope > strong');
+    const progressCopy = card.locator('.milestone-progress-copy');
+    const xp = progressCopy.locator('b');
+    await expect(card).toBeVisible();
+    await expect(level).toHaveText('Cấp 12');
+
+    expect(await page.evaluate(
+      () => document.documentElement.scrollWidth > document.documentElement.clientWidth,
+    )).toBe(false);
+    expect(await card.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(false);
+
+    const [cardBox, headingCopyBox, levelBox, progressCopyBox, xpBox] = await Promise.all([
+      card.boundingBox(),
+      headingCopy.boundingBox(),
+      level.boundingBox(),
+      progressCopy.boundingBox(),
+      xp.boundingBox(),
+    ]);
+    expect((headingCopyBox?.x ?? 0) + (headingCopyBox?.width ?? 0))
+      .toBeLessThanOrEqual((levelBox?.x ?? width) + 1);
+    expect((levelBox?.x ?? 0) + (levelBox?.width ?? 0))
+      .toBeLessThanOrEqual((cardBox?.x ?? 0) + (cardBox?.width ?? width) - 15);
+    expect((xpBox?.x ?? 0) + (xpBox?.width ?? 0))
+      .toBeLessThanOrEqual((progressCopyBox?.x ?? 0) + (progressCopyBox?.width ?? width));
+
+    for (const singleLineCopy of [level, xp]) {
+      expect(await singleLineCopy.evaluate((element) => {
+        const range = document.createRange();
+        range.selectNodeContents(element);
+        return new Set([...range.getClientRects()].map((rect) => Math.round(rect.top))).size;
+      })).toBe(1);
+    }
+  }
+});
+
 test('child header shows the saved avatar and name only, then stays fixed while scrolling', async ({ page }) => {
   await page.route('https://example.test/child-avatar.svg', async (route) => {
     await route.fulfill({

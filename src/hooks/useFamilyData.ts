@@ -199,7 +199,6 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
       const result = await mutation();
       if (activeTargetKey.current === mutationTargetKey) {
         await refresh();
-        if (activeTargetKey.current === mutationTargetKey) setError(null);
       }
       return result;
     } catch (cause) {
@@ -262,10 +261,10 @@ export function useFamilyData(context: FamilyContext | null, accessScope: Family
       if (!context) return Promise.reject(new Error('Chưa chọn bé.'));
       return runMutation(() => createLearningGoal(context, subject, minutes));
     },
-    saveSchedule: (events: ScheduleSetupItem[]) => {
+    saveSchedule: (events: ScheduleSetupItem[], expectedVersion: string) => {
       if (!context) return Promise.reject(new Error('Chưa chọn bé.'));
       if (!data) return Promise.reject(new Error('Lịch chưa tải xong.'));
-      return runMutation(() => saveScheduleSetup(context, events, data.scheduleVersion));
+      return runMutation(() => saveScheduleSetup(context, events, expectedVersion));
     },
     uploadEvidence: (sessionId: string, file: File) => {
       if (!context) return Promise.reject(new Error('Chưa chọn bé.'));

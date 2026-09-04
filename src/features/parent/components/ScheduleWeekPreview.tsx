@@ -37,18 +37,18 @@ export function ScheduleWeekPreview({
     .sort((left, right) => left.startMinutes - right.startMinutes), [conflicts, drafts, selectedDay]);
 
   return (
-    <div className="mb-5 rounded-[24px] border app-border-color app-surface p-4 shadow-sm">
-      <div className="mb-3 flex items-center justify-between">
-        <div>
+    <div className="schedule-week-preview mb-5 rounded-[24px] border app-border-color app-surface p-4 shadow-sm">
+      <div className="schedule-week-preview-header mb-3">
+        <div className="schedule-week-preview-copy">
           <b className="text-xs font-black uppercase tracking-wider app-text-muted">Lịch hoạt động theo thứ trong tuần</b>
           <p className="text-[11px] app-text-muted">Chọn từng thứ để xem lịch đã xếp và giờ trống.</p>
         </div>
-        <span className="rounded-full app-blue-soft px-2.5 py-0.5 text-[10px] font-bold app-primary-text">
+        <span className="schedule-week-preview-count rounded-full app-blue-soft px-2.5 py-0.5 text-[10px] font-bold app-primary-text">
           {drafts.flatMap((draft) => draft.days).length} mục/tuần
         </span>
       </div>
 
-      <div className="grid grid-cols-7 gap-1.5" role="tablist" aria-label="Ngày trong tuần">
+      <div className="schedule-week-day-grid" role="tablist" aria-label="Ngày trong tuần">
         {DAY_KEYS.map((day, index) => {
           const count = drafts.filter((draft) => draft.days.includes(day)).length;
           const selected = selectedDay === day;
@@ -61,7 +61,7 @@ export function ScheduleWeekPreview({
               aria-selected={selected}
               aria-label={`${DAY_LONG_VI[index]}: ${count} hoạt động${hasConflict ? ', có trùng giờ' : ''}`}
               onClick={() => onSelectDay(day)}
-              className={`relative flex flex-col items-center justify-center rounded-2xl py-2 transition ${
+              className={`schedule-week-day-option relative flex min-w-0 flex-col items-center justify-center rounded-2xl py-2 transition ${
                 selected ? 'app-strong-bg app-on-strong shadow-md'
                   : hasConflict ? 'border app-red-border app-red-soft app-red-text'
                     : count > 0 ? 'border app-border-color app-background app-text-color'
@@ -98,19 +98,19 @@ export function ScheduleWeekPreview({
                   key={draft.key}
                   type="button"
                   onClick={() => onEditDraft(draft.key)}
-                  className={`flex w-full items-center justify-between rounded-xl border p-2.5 text-left transition hover:shadow-sm ${conflict ? 'app-red-border app-red-soft' : 'app-border-color app-surface'}`}
+                  className={`schedule-week-event-row flex w-full min-w-0 items-center rounded-xl border p-2.5 text-left transition hover:shadow-sm ${conflict ? 'app-red-border app-red-soft' : 'app-border-color app-surface'}`}
                 >
-                  <span className="flex min-w-0 items-center gap-2.5">
-                    <MaterialIcon name={category.icon} className="text-lg app-text-muted" />
-                    <span className="min-w-0">
-                      <span className="flex items-center gap-1.5">
-                        <b className="truncate text-xs app-text-color">{draft.subject || draft.title || 'Hoạt động'}</b>
-                        <span className={`rounded px-1.5 py-0.2 text-[9px] font-bold ${category.bg} ${category.textColor}`}>{category.label}</span>
+                  <span className="schedule-week-event-main flex min-w-0 flex-1 items-center gap-2.5">
+                    <MaterialIcon name={category.icon} className="schedule-week-event-icon text-lg app-text-muted" />
+                    <span className="schedule-week-event-copy min-w-0">
+                      <span className="schedule-week-event-title-row flex min-w-0 items-center gap-1.5">
+                        <b className="schedule-week-event-title min-w-0 flex-1 truncate text-xs app-text-color">{draft.subject || draft.title || 'Hoạt động'}</b>
+                        <span className={`schedule-week-event-category rounded px-1.5 py-0.2 text-[9px] font-bold ${category.bg} ${category.textColor}`}>{category.label}</span>
                       </span>
                       {detail ? <span className="block truncate text-[10px] app-text-muted">{detail}</span> : null}
                     </span>
                   </span>
-                  <span className="flex-shrink-0 text-right">
+                  <span className="schedule-week-event-time flex-shrink-0 text-right">
                     <span className="block text-xs font-bold app-text-color">{draft.startTime || '--:--'} – {minutesToTime(endMinutes)}</span>
                     <span className="text-[10px] app-text-muted">{draft.duration || 0} phút</span>
                   </span>
