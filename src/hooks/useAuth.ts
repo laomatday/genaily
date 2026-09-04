@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import { isSupabaseConfigured, supabase } from '../lib/supabase';
 
@@ -15,6 +15,7 @@ export interface AuthState {
 export function useAuth(): AuthState {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(isSupabaseConfigured);
+  const sessionGeneration = useRef(0);
 
   useEffect(() => {
     if (!isSupabaseConfigured) {
@@ -23,14 +24,19 @@ export function useAuth(): AuthState {
     }
 
     let active = true;
+    const initialGeneration = sessionGeneration.current;
     void supabase.auth.getSession().then(({ data, error }) => {
-      if (!active) return;
+      // INITIAL_SESSION/auth events may win the race against getSession().
+      // Never let a late bootstrap response restore the previous account.
+      if (!active || initialGeneration !== sessionGeneration.current) return;
       if (error) setUser(null);
       else setUser(data.session?.user ?? null);
       setLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      sessionGeneration.current += 1;
       setUser(session?.user ?? null);
       setLoading(false);
     });

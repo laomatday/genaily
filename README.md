@@ -53,7 +53,13 @@ vào project CRM cũ; hãy dùng project riêng theo
 ## Edge Functions
 
 ```bash
-npx supabase secrets set GEMINI_API_KEY=... GEMINI_MODEL=gemini-3.7-flash
+npx supabase secrets set \
+  GEMINI_API_KEY=... \
+  GEMINI_MODEL=gemini-3.7-flash \
+  AI_GENERATION_MAX_CONCURRENCY=4 \
+  AI_GENERATION_LEASE_TTL_SECONDS=90 \
+  GEMINI_REQUEST_TIMEOUT_MS=45000 \
+  AI_GENERATION_RETRY_AFTER_SECONDS=10
 npx supabase functions deploy generate-week-plan
 npx supabase functions deploy dispatch-device-command
 npx supabase functions deploy device-agent --no-verify-jwt
@@ -66,6 +72,12 @@ ghép/token riêng; tắt gateway JWT là chủ đích và mọi action thiết 
 cách build Android/iOS nằm tại [`mobile/README.md`](mobile/README.md). Cron gọi batch phải được cấu hình theo
 [`docs/DEPLOYMENT_RUNBOOK.md`](docs/DEPLOYMENT_RUNBOOK.md); không nhúng
 service-role key vào migration hay repository.
+
+`generate-week-plan` lấy một lease PostgreSQL trước khi đọc dữ liệu prompt, trừ
+quota và gọi Gemini. Mặc định toàn project chỉ có bốn lượt sinh đồng thời; yêu
+cầu vượt mức nhận HTTP `429` cùng `Retry-After`. Lease được nhả trong `finally`,
+có TTL 90 giây để tự phục hồi nếu Edge isolate dừng đột ngột, và Gemini có
+timeout 45 giây qua `httpOptions` chính thức của SDK.
 
 ## Kiểm tra
 
@@ -80,9 +92,15 @@ migration, unit/integration tests, production build và bundle budget. Test E2E
 đăng nhập có mutation chỉ chạy khi đặt `E2E_ALLOW_DATA_MUTATION=true` cùng bộ
 biến E2E; script seed từ chối project từ xa nếu chưa cho phép rõ ràng.
 
-CI còn reset database sạch, chạy 104 assertion pgTAP/RLS và tám luồng E2E quan
+CI còn reset database sạch, chạy 119 assertion pgTAP/RLS và tám luồng E2E quan
 trọng: onboarding lần đầu, lưu lịch, đổi bé, đồng bộ nhiều tab, phần thưởng,
 Parent Gate và Study Lock.
+
+Kiểm thử 200 tài khoản đồng thời dùng account synthetic trên local/staging được
+mô tả tại [`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md). Harness không tự chạy
+trong CI thường ngày và từ chối remote target nếu thiếu xác nhận staging.
+Kết quả rà soát gần nhất nằm tại
+[`docs/LOAD_TEST_REPORT_2026-09-04.md`](docs/LOAD_TEST_REPORT_2026-09-04.md).
 
 ## Nguyên tắc bảo mật
 

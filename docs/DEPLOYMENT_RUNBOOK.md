@@ -24,7 +24,7 @@ npm run seed:e2e
 npm run test:e2e
 ```
 
-Kết quả bắt buộc: migration reset sạch, 104 pgTAP assertion đạt và tám E2E có
+Kết quả bắt buộc: migration reset sạch, 119 pgTAP assertion đạt và tám E2E có
 mutation không bị skip.
 
 ## 3. Áp dụng staging
@@ -38,7 +38,11 @@ npx supabase functions deploy dispatch-device-command
 npx supabase functions deploy device-agent --no-verify-jwt
 npx supabase secrets set \
   GEMINI_API_KEY=... \
-  GEMINI_MODEL=gemini-3.7-flash
+  GEMINI_MODEL=gemini-3.7-flash \
+  AI_GENERATION_MAX_CONCURRENCY=4 \
+  AI_GENERATION_LEASE_TTL_SECONDS=90 \
+  GEMINI_REQUEST_TIMEOUT_MS=45000 \
+  AI_GENERATION_RETRY_AFTER_SECONDS=10
 ```
 
 Chỉ cấu hình `DEVICE_CONTROL_WEBHOOK_URL` và `DEVICE_CONTROL_WEBHOOK_TOKEN` nếu
@@ -47,6 +51,27 @@ dùng thêm provider MDM ngoài; companion Android/iOS không cần hai secret n
 Sau khi push, chạy Supabase Security Advisor và Performance Advisor. Xác nhận
 `anon` không có privilege trên bảng ứng dụng, browser không có mutation trực
 tiếp và `service_role` là role duy nhất gọi được RPC delivery.
+
+### Giới hạn đồng thời AI
+
+Migration `limit_ai_generation_concurrency` tạo semaphore trong schema
+`private`. Edge Function xác thực user trước, sau đó dùng `service_role` lấy
+lease; RPC kiểm tra lại active parent và active child. Chỉ request có lease mới
+đọc bốn nhóm dữ liệu prompt, trừ quota ngày và gọi Gemini. Mặc định toàn project
+có bốn slot; request tiếp theo nhận `429 AI_GENERATION_BUSY` và header
+`Retry-After: 10`.
+
+- `AI_GENERATION_MAX_CONCURRENCY`: `1..16`, mặc định `4`.
+- `AI_GENERATION_LEASE_TTL_SECONDS`: `30..300`, mặc định `90`.
+- `GEMINI_REQUEST_TIMEOUT_MS`: `5000..120000`, mặc định `45000`; runtime tự
+  hạ timeout để luôn thấp hơn TTL ít nhất 10 giây.
+- `AI_GENERATION_RETRY_AFTER_SECONDS`: `1..60`, mặc định `10`.
+
+Không grant hai RPC lease cho `anon`/`authenticated` và không đưa
+`SUPABASE_SERVICE_ROLE_KEY` vào file env frontend. Khi test burst ở staging,
+xác nhận không quá số slot cấu hình có `lease_token`, request bận không làm tăng
+`ai_usage_windows`, và mọi slot trở về rỗng sau khi request hoàn tất hoặc TTL
+hết.
 
 ## 4. Worker giao lệnh thiết bị
 

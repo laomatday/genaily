@@ -149,14 +149,10 @@ Deno.serve(async (request) => {
       if (!isServiceRequest) return json({ error: 'Service role access required' }, 403);
       const requestedLimit = Number.isInteger(payload.limit) ? Number(payload.limit) : DEFAULT_BATCH_SIZE;
       const limit = Math.min(MAX_BATCH_SIZE, Math.max(1, requestedLimit));
-      const staleLease = new Date(Date.now() - 2 * 60_000).toISOString();
-      const currentTime = new Date().toISOString();
-      const { data: commands, error } = await deliveryClient
-        .from('device_commands')
-        .select('id, family_id, child_profile_id, session_id, command, policy, status, external_id, idempotency_key')
-        .or(`and(status.in.(queued,failed,configuration_required),next_attempt_at.lte.${currentTime}),and(status.eq.processing,last_attempt_at.lt.${staleLease})`)
-        .order('next_attempt_at', { ascending: true })
-        .limit(limit);
+      const { data: commands, error } = await deliveryClient.rpc(
+        'prepare_due_device_command_batch',
+        { p_limit: limit },
+      );
       if (error) return json({ error: error.message }, 400);
       const results = await Promise.all(
         ((commands ?? []) as DeviceCommand[]).map((command) => deliverCommand(deliveryClient, command)),

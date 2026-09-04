@@ -14,8 +14,9 @@ server quản lý, không phụ thuộc URL/localStorage.
 Project Supabase mới đã nhận đủ migration, RLS, trigger, bucket và ba Edge
 Function. Kênh companion Android/iOS đã thay provider giả bằng pairing/token,
 delivery queue và acknowledgement thật. Phần còn lại trước khi phát hành là
-cấu hình secret Gemini, tài khoản E2E, ký/cài companion lên thiết bị thật và
-thêm FCM/APNs cho push production.
+chạy tải 200 tài khoản trên staging cô lập, cấp tài khoản E2E, xác nhận
+quota/billing Gemini, ký/cài companion lên thiết bị thật và thêm FCM/APNs cho
+push production.
 
 ## 2. Đợt 1 — Ổn định và bảo mật
 
@@ -25,7 +26,7 @@ thêm FCM/APNs cho push production.
 - [x] Gắn child mode với JWT `session_id` ở database; local state/URL không thể
   tự khôi phục quyền ba/mẹ.
 - [x] Thu hẹp grants/RLS; mutation nghiệp vụ đi qua RPC hẹp.
-- [x] Thêm 99 assertion pgTAP cho parent, managed child, child identity,
+- [x] Thêm 119 assertion pgTAP cho parent, managed child, child identity,
   guardian, outsider và service role.
 - [x] Viết README, `.env.example`, tắt seed mặc định.
 - [x] Thêm baseline schema độc lập và kế hoạch tách khỏi project CRM.
@@ -40,7 +41,9 @@ thêm FCM/APNs cho push production.
 - [x] Initial query chỉ lấy cửa sổ cần cho màn hình hiện tại.
 - [x] Lịch sử session dùng cursor/keyset pagination và nút “Tải thêm”.
 - [x] Các query có limit cấu hình tập trung trong `src/config/appConfig.ts`.
-- [x] Realtime được debounce và chỉ invalidate bảng/child scope liên quan.
+- [x] Realtime được debounce và chỉ invalidate bảng/child scope liên quan;
+  mặc định dùng polling 30 giây có nhận biết trạng thái tab để không dùng hết
+  giới hạn kết nối của gói Free.
 
 ### Cache và riêng tư
 
@@ -52,6 +55,8 @@ thêm FCM/APNs cho push production.
 ### AI và thiết bị
 
 - [x] Quota AI theo family/profile/ngày, claim atomic ở database.
+- [x] Semaphore AI toàn project mặc định bốn request, lease có TTL, request dư
+  trả `429`/`Retry-After` và Gemini có timeout thấp hơn TTL.
 - [x] Structured JSON schema và parser regression test cho Gemini output.
 - [x] Model cấu hình bằng secret; mặc định Edge Function là
   `gemini-3.7-flash`.
@@ -131,10 +136,10 @@ schedule_events (mẫu tuần)
 | Sửa/xóa không phá lịch sử | Đạt | Test dữ liệu staging |
 | Một session `in_progress` mỗi trẻ | Đạt | pgTAP cloud đạt |
 | Study Lock tự phục hồi, không gửi trùng | Đạt | Pair/poll/ack cloud đạt; còn thiết bị thật |
-| RLS đầy đủ mọi vai trò | 99 test đã viết | 99/99 đạt trên cloud |
+| RLS đầy đủ mọi vai trò | 119 test đã viết | 119/119 đạt trên cloud |
 | Không còn policy/grant demo rộng | Đạt | Advisor + pgTAP đạt |
 | Dữ liệu nhạy cảm không ở localStorage | Đạt | Browser inspection |
-| Onboarding/Save/đổi bé/multi-tab/Parent Gate/Study Lock E2E | 7 flow xác thực + 2 regression công khai | Chạy full với test account |
+| Onboarding/Save/đổi bé/multi-tab/Parent Gate/Study Lock E2E | 8 flow xác thực + 3 regression công khai | Chạy full với test account |
 | Build trong bundle budget | Đạt trong local check | CI production build |
 | README/migration/env/runbook đồng nhất | Đạt | Ops review |
 
@@ -153,30 +158,47 @@ npx supabase test db
 
 Kết quả local ngày 04/09/2026:
 
-- `npm run check`: đạt; 14 test files/38 tests đạt, 28 migration parse được,
-  production build và bundle budget đạt (tổng JavaScript gzip 188.222 byte).
-- `npm run test:e2e`: 2 flow public/mobile/accessibility đạt; 7 flow xác thực được
+- ESLint, Stylelint, hardcode audit và TypeScript đạt; 24 test files/71 tests
+  đạt, 35 migration parse được, production build và bundle budget đạt (tổng
+  JavaScript gzip 189.710 byte).
+- `npm run test:e2e`: 3 flow public/mobile/accessibility đạt; 8 flow xác thực được
   skip đúng thiết kế vì chưa cấp test account và `E2E_ALLOW_DATA_MUTATION`.
 - `npm audit --omit=dev`: 0 vulnerability.
-- 99 assertion pgTAP/RLS đã chạy trực tiếp trên project mới: 99 đạt, 0 lỗi.
-- Project cloud có 23 bảng `public`, 15 public trigger, 36 public routine,
-  23 public RLS policy, 28 migration và không có bảng
-  ứng dụng nào tắt RLS.
-- `generate-week-plan` và `dispatch-device-command` dùng JWT;
+- 119 assertion pgTAP/RLS đã chạy trực tiếp trên project mới trong transaction
+  rollback: 119 đạt, 0 lỗi và fixture đã được dọn sạch.
+- Sáu migration chống tranh chấp/tối ưu tải mới đã được áp dụng trên project;
+  các bảng ứng dụng vẫn bật RLS.
+- `generate-week-plan` ACTIVE v3 và `dispatch-device-command` ACTIVE v4 dùng JWT;
   `device-agent` tắt gateway JWT nhưng bắt buộc mã ghép entropy cao hoặc header
-  `Device` token tự xác thực. Smoke test pair → poll → acknowledge đạt và fixture
-  cloud đã được dọn sạch.
+  `Device` token tự xác thực; function này đang ACTIVE v3. Smoke test request
+  thiếu xác thực trả đúng HTTP 401.
 
 Security Advisor cảnh báo các public RPC dùng `SECURITY DEFINER`; đây là các RPC
 nghiệp vụ chủ đích, có kiểm tra quyền nội bộ và đã qua pgTAP. Hai bảng nội bộ
 `private.app_device_modes` và `private.account_app_onboarding` đã bật RLS, không
 cấp DML cho `anon` hoặc `authenticated`; onboarding chỉ truy cập qua RPC hẹp.
 
-Hai E2E public/accessibility/regression chạy không cần tài khoản. Bảy flow xác thực chỉ chạy
+Ba E2E public/accessibility/regression chạy không cần tài khoản. Tám flow xác thực chỉ chạy
 khi có biến `E2E_*` và `E2E_ALLOW_DATA_MUTATION=true` để tránh vô tình sửa dữ
 liệu thật. CI database tự dựng account test cô lập.
 
-## 9. Việc vận hành không tự động thực hiện từ repository
+## 9. Kiểm thử 200 tài khoản đồng thời
+
+- [x] Dashboard dùng một snapshot RPC thay cho khoảng 16 request mỗi lượt.
+- [x] Thêm harness tạo 200 tài khoản synthetic và chạy đồng thời, có profile
+  đọc snapshot, lưu lịch và Realtime.
+- [x] Harness chỉ cho phép local hoặc staging đã xác nhận chính xác, không vô
+  tình bắn tải vào project remote hiện tại.
+- [ ] Chạy bài đo chính thức trên staging tương đương production; workspace
+  hiện chưa có Docker/Supabase local hoặc service-role credentials của staging.
+
+Ngưỡng chấp nhận: error rate không quá 1%, dashboard p95 không quá 2.500 ms,
+lưu lịch p95 không quá 3.000 ms, không có Auth 429, PostgREST 5xx hoặc dữ liệu
+chéo tài khoản. Kết quả và lệnh chạy nằm trong
+[`docs/LOAD_TEST_REPORT_2026-09-04.md`](docs/LOAD_TEST_REPORT_2026-09-04.md) và
+[`docs/LOAD_TESTING.md`](docs/LOAD_TESTING.md).
+
+## 10. Việc vận hành không tự động thực hiện từ repository
 
 - Đăng nhập/link Supabase CLI khi cần thao tác cloud từ terminal; project hiện
   đã được cấu hình qua kết nối Supabase trực tiếp.

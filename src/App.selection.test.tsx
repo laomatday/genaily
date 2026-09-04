@@ -15,6 +15,7 @@ const state = vi.hoisted(() => ({
   authLoading: true,
   authUser: null as User | null,
   contextIds: [] as Array<string | null>,
+  parentRenders: [] as Array<{ accountEmail: string | undefined; selectedChildId: string }>,
   getServerAppMode: vi.fn(),
   getAppOnboardingStatus: vi.fn(),
   signOut: vi.fn(),
@@ -24,6 +25,9 @@ const parentId = '10000000-0000-4000-8000-000000000001';
 const firstChildId = '10000000-0000-4000-8000-000000000011';
 const secondChildId = '10000000-0000-4000-8000-000000000012';
 const familyId = '10000000-0000-4000-8000-000000000010';
+const otherParentId = '20000000-0000-4000-8000-000000000001';
+const otherFamilyId = '20000000-0000-4000-8000-000000000010';
+const otherChildId = '20000000-0000-4000-8000-000000000011';
 const secondContext: FamilyContext = {
   familyId,
   parentProfileId: parentId,
@@ -51,6 +55,16 @@ const children = [
   },
 ];
 
+const otherChildren = [{
+  account_space_id: otherFamilyId,
+  parent_profile_id: otherParentId,
+  child_profile_id: otherChildId,
+  child_name: 'Bé Tài Khoản B',
+  child_avatar_url: null,
+  child_grade_level: 4,
+  child_joined_at: '2026-09-03T00:00:00.000Z',
+}];
+
 vi.mock('./hooks/useAuth', () => ({
   useAuth: () => ({
     user: state.authUser,
@@ -70,7 +84,7 @@ vi.mock('./hooks/useAccountChildren', () => ({
     childProfileId: child.child_profile_id,
   }),
   useAccountChildren: (user: User | null) => ({
-    children: user ? children : [],
+    children: user?.id === otherParentId ? otherChildren : user ? children : [],
     loading: false,
     error: null,
     refresh: vi.fn(),
@@ -119,9 +133,16 @@ vi.mock('./lib/familyRepository', () => ({
 }));
 
 vi.mock('./features/parent/ParentDashboard', () => ({
-  ParentDashboard: ({ selectedChildId }: { selectedChildId: string }) => (
-    <div data-testid="selected-child-id">{selectedChildId}</div>
-  ),
+  ParentDashboard: ({
+    accountEmail,
+    selectedChildId,
+  }: {
+    accountEmail: string | undefined;
+    selectedChildId: string;
+  }) => {
+    state.parentRenders.push({ accountEmail, selectedChildId });
+    return <div data-testid="selected-child-id">{selectedChildId}</div>;
+  },
 }));
 
 vi.mock('./features/child/ChildApp', () => ({
@@ -133,6 +154,7 @@ beforeEach(() => {
   state.authLoading = true;
   state.authUser = null;
   state.contextIds.length = 0;
+  state.parentRenders.length = 0;
   state.getServerAppMode.mockReset().mockResolvedValue({
     appMode: 'parent',
     familyId: null,
@@ -184,5 +206,70 @@ describe('App selected child restoration', () => {
       expect(screen.getByTestId('selected-child-id').textContent).toBe(secondChildId);
     });
     expect(state.contextIds).not.toContain(firstChildId);
+  });
+
+  it('remounts account state before rendering a direct auth switch from A to B', async () => {
+    const otherContext: FamilyContext = {
+      familyId: otherFamilyId,
+      parentProfileId: otherParentId,
+      childProfileId: otherChildId,
+    };
+    persistFamilyContext(parentId, secondContext);
+    persistFamilyContext(otherParentId, otherContext);
+    localStorage.setItem(
+      getDeviceSetupStorageKey(parentId),
+      serializeDeviceSetup(parentId, 'parent'),
+    );
+    localStorage.setItem(
+      getDeviceSetupStorageKey(otherParentId),
+      serializeDeviceSetup(otherParentId, 'parent'),
+    );
+    state.authUser = {
+      id: parentId,
+      email: 'account-a@example.test',
+      user_metadata: { full_name: 'Tài khoản A' },
+    } as unknown as User;
+    state.authLoading = false;
+
+    const view = render(<App />);
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-child-id').textContent).toBe(secondChildId);
+    });
+
+    let resolveModeForB!: (value: {
+      appMode: 'parent';
+      familyId: null;
+      childProfileId: null;
+    }) => void;
+    state.getServerAppMode.mockImplementationOnce(() => new Promise((resolve) => {
+      resolveModeForB = resolve;
+    }));
+    const contextRenderStart = state.contextIds.length;
+    const parentRenderStart = state.parentRenders.length;
+
+    state.authUser = {
+      id: otherParentId,
+      email: 'account-b@example.test',
+      user_metadata: { full_name: 'Tài khoản B' },
+    } as unknown as User;
+    view.rerender(<App />);
+
+    // B starts from an isolated hook tree. A's dashboard and data target must
+    // disappear synchronously, before B's server-mode request resolves.
+    expect(screen.queryByTestId('selected-child-id')).toBeNull();
+    expect(state.contextIds.slice(contextRenderStart)).not.toContain(secondChildId);
+    expect(state.parentRenders.slice(parentRenderStart)).not.toContainEqual({
+      accountEmail: 'account-b@example.test',
+      selectedChildId: secondChildId,
+    });
+
+    resolveModeForB({ appMode: 'parent', familyId: null, childProfileId: null });
+    await waitFor(() => {
+      expect(screen.getByTestId('selected-child-id').textContent).toBe(otherChildId);
+    });
+    expect(state.parentRenders.slice(parentRenderStart)).not.toContainEqual({
+      accountEmail: 'account-b@example.test',
+      selectedChildId: secondChildId,
+    });
   });
 });

@@ -2151,7 +2151,8 @@ textarea::placeholder {
 .child-profile-sheet {
   position: relative;
   z-index: 1;
-  width: min(100%, 28.75rem);
+  width: 100%;
+  max-width: none;
   max-height: min(88vh, 47.5rem);
   overflow-y: auto;
   border: 1px solid var(--app-border);
@@ -2837,13 +2838,13 @@ textarea::placeholder {
 
 @media (min-width: 40rem) {
   .child-sheet-layer {
-    align-items: center;
-    padding: 1rem;
+    align-items: flex-end;
+    padding: 2rem 0 0;
   }
 
   .child-profile-sheet {
-    border-bottom: 1px solid var(--app-border);
-    border-radius: 1.75rem;
+    border-bottom: 0;
+    border-radius: 1.75rem 1.75rem 0 0;
   }
 }
 

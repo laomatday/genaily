@@ -1,7 +1,66 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
-select plan(104);
+select plan(119);
+
+select ok(
+  (
+    select relrowsecurity
+    from pg_class
+    where oid = 'private.ai_generation_leases'::regclass
+  ),
+  'private AI generation lease table has RLS enabled'
+);
+select ok(
+  (
+    select relforcerowsecurity
+    from pg_class
+    where oid = 'private.ai_generation_leases'::regclass
+  ),
+  'private AI generation lease table forces RLS'
+);
+select ok(
+  not exists (
+    select 1
+    from information_schema.table_privileges privilege
+    where privilege.table_schema = 'private'
+      and privilege.table_name = 'ai_generation_leases'
+      and privilege.grantee in ('PUBLIC', 'anon', 'authenticated', 'service_role')
+  ),
+  'browser and service roles have no direct grants on AI generation leases'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.claim_ai_generation_lease(uuid,uuid,uuid,uuid,integer,integer)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot claim an AI generation lease'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.release_ai_generation_lease(uuid)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot release an AI generation lease'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.claim_ai_generation_lease(uuid,uuid,uuid,uuid,integer,integer)',
+    'EXECUTE'
+  ),
+  'service role can claim an AI generation lease'
+);
+select ok(
+  has_function_privilege(
+    'service_role',
+    'public.release_ai_generation_lease(uuid)',
+    'EXECUTE'
+  ),
+  'service role can release an AI generation lease'
+);
 
 select ok(
   (
@@ -163,12 +222,20 @@ select ok(
   'anonymous users cannot execute the child note RPC'
 );
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.save_schedule_setup(uuid,uuid,jsonb)',
     'EXECUTE'
   ),
-  'authenticated can execute the audited schedule RPC'
+  'authenticated cannot bypass optimistic concurrency through the legacy schedule RPC'
+);
+select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.save_schedule_setup_v2(uuid,uuid,jsonb,text)',
+    'EXECUTE'
+  ),
+  'authenticated can execute the versioned schedule RPC'
 );
 select ok(
   not has_function_privilege(
@@ -395,7 +462,7 @@ select isnt(
 );
 
 select throws_ok(
-  $$select public.save_schedule_setup(
+  $$select public.save_schedule_setup_v2(
     (select family_id from rls_test_context),
     '10000000-0000-4000-8000-000000000002'::uuid,
     jsonb_build_array(jsonb_build_object(
@@ -403,7 +470,12 @@ select throws_ok(
       'title', 'Lịch kiểm thử', 'subject', 'Toán', 'event_type', 'self_study',
       'day_of_week', 'mon', 'start_time', '19:00', 'duration_minutes', 45,
       'sort_order', 10, 'study_lock_enabled', false
-    ))
+    )),
+    public.get_child_dashboard_snapshot(
+      (select family_id from rls_test_context),
+      '10000000-0000-4000-8000-000000000002'::uuid,
+      now(), current_date, current_date + 7
+    )->>'schedule_version'
   )$$,
   'P0001',
   'Invalid schedule item',
@@ -477,6 +549,24 @@ select results_eq(
   'managed child mode cannot enumerate a sibling profile'
 );
 select is_empty(
+  $$select id from public.profiles where id = '10000000-0000-4000-8000-000000000005'::uuid$$,
+  'managed child mode cannot read a sibling profile directly'
+);
+select is_empty(
+  $$select profile_id from public.family_members where profile_id = '10000000-0000-4000-8000-000000000005'::uuid$$,
+  'managed child mode cannot read a sibling membership directly'
+);
+select throws_ok(
+  $$select public.get_child_dashboard_snapshot(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000005'::uuid,
+    now(), current_date, current_date + 7
+  )$$,
+  'P0001',
+  'Child profile is not accessible to this account',
+  'managed child mode cannot request a sibling dashboard snapshot'
+);
+select is_empty(
   $$select id from public.managed_devices$$,
   'managed child mode cannot read device pairing secrets or status'
 );
@@ -526,6 +616,29 @@ select throws_ok(
   'Parent access required',
   'parent mutation is denied while the auth session is in child mode'
 );
+
+reset role;
+update private.app_device_modes
+set expires_at = now() - interval '1 day'
+where auth_session_id = 'parent-device-session-one';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-000000000001","role":"authenticated","session_id":"parent-device-session-one"}';
+select results_eq(
+  $$select app_mode || ':' || child_profile_id::text from public.get_app_mode()$$,
+  array['child:10000000-0000-4000-8000-000000000002'::text],
+  'an expired legacy marker fails closed and remains in child mode'
+);
+select throws_ok(
+  $$select public.create_learning_goal(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000002'::uuid,
+    'Không được mở khóa theo thời gian',
+    30
+  )$$,
+  'P0001',
+  'Parent access required',
+  'an expired child-mode marker still denies parent mutations'
+);
 select lives_ok(
   $$select public.start_learning_session('30000000-0000-4000-8000-000000000001'::uuid)$$,
   'managed child mode can run only the selected child workflow'
@@ -560,6 +673,50 @@ select lives_ok(
   )$$,
   'freshly re-authenticated session restores parent mutations'
 );
+
+do $$
+begin
+  perform set_config(
+    'genai_test.schedule_version',
+    (
+      public.get_child_dashboard_snapshot(
+        (select family_id from rls_test_context),
+        '10000000-0000-4000-8000-000000000002'::uuid,
+        now(), current_date, current_date + 7
+      )->>'schedule_version'
+    ),
+    true
+  );
+end $$;
+select lives_ok(
+  $$select public.save_schedule_setup_v2(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000002'::uuid,
+    jsonb_build_array(jsonb_build_object(
+      'title', 'Thay thế đúng cùng khung giờ',
+      'subject', 'Toán',
+      'event_type', 'self_study',
+      'day_of_week', 'mon',
+      'start_time', '19:00',
+      'duration_minutes', 45,
+      'sort_order', 10,
+      'study_lock_enabled', true
+    )),
+    current_setting('genai_test.schedule_version')
+  )$$,
+  'optimistic save can delete and replace an omitted event at the same time'
+);
+select throws_ok(
+  $$select public.save_schedule_setup_v2(
+    (select family_id from rls_test_context),
+    '10000000-0000-4000-8000-000000000002'::uuid,
+    '[]'::jsonb,
+    current_setting('genai_test.schedule_version')
+  )$$,
+  'P0001',
+  'SCHEDULE_VERSION_CONFLICT',
+  'a stale editor cannot silently overwrite a newer schedule'
+);
 select lives_ok(
   $$select public.save_child_milestone(
     (select family_id from rls_test_context),
@@ -572,11 +729,10 @@ select lives_ok(
 );
 
 select lives_ok(
-  $$select public.save_schedule_setup(
+  $$select public.save_schedule_setup_v2(
     (select family_id from rls_test_context),
     '10000000-0000-4000-8000-000000000002'::uuid,
     jsonb_build_array(jsonb_build_object(
-      'id', '20000000-0000-4000-8000-000000000001',
       'title', 'Lịch riêng của bé thứ nhất',
       'subject', 'Toán',
       'event_type', 'self_study',
@@ -585,12 +741,17 @@ select lives_ok(
       'duration_minutes', 45,
       'sort_order', 10,
       'study_lock_enabled', true
-    ))
+    )),
+    public.get_child_dashboard_snapshot(
+      (select family_id from rls_test_context),
+      '10000000-0000-4000-8000-000000000002'::uuid,
+      now(), current_date, current_date + 7
+    )->>'schedule_version'
   )$$,
   'parent saves the first child schedule through the child-scoped RPC'
 );
 select lives_ok(
-  $$select public.save_schedule_setup(
+  $$select public.save_schedule_setup_v2(
     (select family_id from rls_test_context),
     '10000000-0000-4000-8000-000000000005'::uuid,
     jsonb_build_array(jsonb_build_object(
@@ -602,7 +763,12 @@ select lives_ok(
       'duration_minutes', 30,
       'sort_order', 20,
       'study_lock_enabled', true
-    ))
+    )),
+    public.get_child_dashboard_snapshot(
+      (select family_id from rls_test_context),
+      '10000000-0000-4000-8000-000000000005'::uuid,
+      now(), current_date, current_date + 7
+    )->>'schedule_version'
   )$$,
   'the same parent saves a separate schedule for a second child'
 );
@@ -623,11 +789,15 @@ select results_eq(
   'saving one child keeps exactly one independent schedule for each sibling'
 );
 select throws_ok(
-  $$select public.save_schedule_setup(
+  $$select public.save_schedule_setup_v2(
     (select family_id from rls_test_context),
     '10000000-0000-4000-8000-000000000005'::uuid,
     jsonb_build_array(jsonb_build_object(
-      'id', '20000000-0000-4000-8000-000000000001',
+      'id', (
+        select id from public.schedule_events
+        where child_profile_id = '10000000-0000-4000-8000-000000000002'::uuid
+        limit 1
+      ),
       'title', 'Không được ghi đè lịch anh chị em',
       'subject', 'Khoa học',
       'event_type', 'self_study',
@@ -636,7 +806,12 @@ select throws_ok(
       'duration_minutes', 30,
       'sort_order', 30,
       'study_lock_enabled', true
-    ))
+    )),
+    public.get_child_dashboard_snapshot(
+      (select family_id from rls_test_context),
+      '10000000-0000-4000-8000-000000000005'::uuid,
+      now(), current_date, current_date + 7
+    )->>'schedule_version'
   )$$,
   'P0001',
   'Schedule item not found',
@@ -676,7 +851,8 @@ set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000002';
 set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-000000000002","role":"authenticated","session_id":"child-auth-session"}';
 
 select results_eq(
-  $$select count(*) from public.schedule_events where id = '20000000-0000-4000-8000-000000000001'::uuid$$,
+  $$select count(*) from public.schedule_events
+    where child_profile_id = '10000000-0000-4000-8000-000000000002'::uuid$$,
   array[1::bigint],
   'child reads only data assigned to that child identity'
 );
@@ -739,7 +915,7 @@ set local request.jwt.claim.sub = '10000000-0000-4000-8000-000000000003';
 set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-000000000003","role":"authenticated","session_id":"member-auth-session"}';
 
 select is_empty(
-  $$select id from public.schedule_events where id = '20000000-0000-4000-8000-000000000001'::uuid$$,
+  $$select id from public.schedule_events$$,
   'another family member cannot read child study data'
 );
 select is(
@@ -798,7 +974,7 @@ select is(
 );
 
 select is_empty(
-  $$select id from public.schedule_events where id = '20000000-0000-4000-8000-000000000001'::uuid$$,
+  $$select id from public.schedule_events$$,
   'outsider cannot read another account schedule'
 );
 select is_empty(

@@ -1,8 +1,8 @@
 import { APP_CONFIG } from '../config/appConfig';
 import { sortScheduleEvents } from '../domain/schedulePolicy';
 import { addLocalDays, formatLocalDateKey, startOfWeek } from './date';
+import type { Json } from './database.types';
 import type { FamilyContext } from './familyIdentity';
-import { dispatchPendingDeviceCommands } from './familyRepository.mutations';
 import { assertValidContext, throwIfSupabaseError } from './familyRepository.shared';
 import type {
   FamilyData,
@@ -14,7 +14,6 @@ import type {
   SessionEventRow,
   SessionHistoryPage,
   SessionTaskRow,
-  SubjectSuggestionRow,
 } from './familyRepository.types';
 import { supabase } from './supabase';
 
@@ -59,138 +58,148 @@ async function loadSessionDetails(sessions: LearningSessionRow[]): Promise<{
   return { tasks: tasksResult.data ?? [], answers: answersResult.data ?? [], sessionEvents: eventsResult.data ?? [] };
 }
 
+interface DashboardSnapshot {
+  family_members: Array<{ profile_id: string; role: string; status: string }>;
+  profiles: Array<FamilyData['parent']>;
+  learning_goals: FamilyData['goals'];
+  learning_sessions: FamilyData['sessions'];
+  schedule_events: FamilyData['schedule'];
+  schedule_version: string;
+  schedule_occurrences: FamilyData['occurrences'];
+  exceptions: FamilyData['exceptions'];
+  family_settings: FamilyData['settings'];
+  ai_plan: FamilyData['aiPlan'];
+  quick_check_questions: FamilyData['questions'];
+  device_commands: FamilyData['deviceCommands'];
+  managed_devices: FamilyData['managedDevices'];
+  device_command_deliveries: FamilyData['deviceCommandDeliveries'];
+  child_milestones: FamilyData['milestones'];
+  notifications: FamilyData['notifications'];
+  session_tasks: FamilyData['tasks'];
+  quick_check_answers: FamilyData['answers'];
+  session_events: FamilyData['sessionEvents'];
+  subject_suggestions: FamilyData['subjectSuggestions'];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
+}
+
+function snapshotArray<T>(snapshot: Record<string, unknown>, key: string): T[] {
+  const value = snapshot[key];
+  if (!Array.isArray(value)) throw new Error(`Máy chủ trả về snapshot thiếu trường ${key}.`);
+  return value as T[];
+}
+
+export function parseDashboardSnapshot(value: Json | null, ctx: FamilyContext): FamilyData {
+  if (!isRecord(value)) throw new Error('Máy chủ không trả về snapshot dashboard hợp lệ.');
+  if (typeof value.schedule_version !== 'string'
+      || !/^[0-9a-f]{32}$/.test(value.schedule_version)) {
+    throw new Error('Máy chủ trả về phiên bản lịch không hợp lệ.');
+  }
+  const snapshot: DashboardSnapshot = {
+    family_members: snapshotArray(value, 'family_members'),
+    profiles: snapshotArray(value, 'profiles'),
+    learning_goals: snapshotArray(value, 'learning_goals'),
+    learning_sessions: snapshotArray(value, 'learning_sessions'),
+    schedule_events: snapshotArray(value, 'schedule_events'),
+    schedule_version: value.schedule_version,
+    schedule_occurrences: snapshotArray(value, 'schedule_occurrences'),
+    exceptions: snapshotArray(value, 'exceptions'),
+    family_settings: isRecord(value.family_settings)
+      ? value.family_settings as unknown as FamilyData['settings']
+      : null,
+    ai_plan: isRecord(value.ai_plan) ? value.ai_plan as unknown as FamilyData['aiPlan'] : null,
+    quick_check_questions: snapshotArray(value, 'quick_check_questions'),
+    device_commands: snapshotArray(value, 'device_commands'),
+    managed_devices: snapshotArray(value, 'managed_devices'),
+    device_command_deliveries: snapshotArray(value, 'device_command_deliveries'),
+    child_milestones: snapshotArray(value, 'child_milestones'),
+    notifications: snapshotArray(value, 'notifications'),
+    session_tasks: snapshotArray(value, 'session_tasks'),
+    quick_check_answers: snapshotArray(value, 'quick_check_answers'),
+    session_events: snapshotArray(value, 'session_events'),
+    subject_suggestions: snapshotArray(value, 'subject_suggestions'),
+  };
+
+  const parentMember = snapshot.family_members.find((member) => (
+    member.profile_id === ctx.parentProfileId && member.role === 'parent' && member.status === 'active'
+  ));
+  const childMember = snapshot.family_members.find((member) => (
+    member.profile_id === ctx.childProfileId && member.role === 'child' && member.status === 'active'
+  ));
+  if (!parentMember || !childMember) throw new Error('Tài khoản không có quyền truy cập hồ sơ của bé này.');
+
+  const parentProfile = snapshot.profiles.find((profile) => profile.id === ctx.parentProfileId);
+  const childProfile = snapshot.profiles.find((profile) => profile.id === ctx.childProfileId);
+  if (!parentProfile || !childProfile) throw new Error('Không tìm thấy hồ sơ phụ huynh hoặc trẻ.');
+
+  const hasMoreSessions = snapshot.learning_sessions.length > APP_CONFIG.sessionPageSize;
+  const historySessions = snapshot.learning_sessions.slice(0, APP_CONFIG.sessionPageSize);
+  const sessions = [...historySessions];
+  const sessionIds = new Set(sessions.map((session) => session.id));
+  for (const session of snapshot.learning_sessions) {
+    if ((session.status === 'in_progress' || session.status === 'awaiting_parent')
+        && !sessionIds.has(session.id)) {
+      sessions.push(session);
+      sessionIds.add(session.id);
+    }
+  }
+  sessions.sort((left, right) => (
+    right.starts_at.localeCompare(left.starts_at) || right.id.localeCompare(left.id)
+  ));
+  return {
+    parent: parentProfile,
+    child: childProfile,
+    goals: snapshot.learning_goals,
+    sessions,
+    schedule: sortScheduleEvents(snapshot.schedule_events as ScheduleEventRow[]),
+    scheduleVersion: snapshot.schedule_version,
+    occurrences: snapshot.schedule_occurrences,
+    exceptions: snapshot.exceptions,
+    settings: snapshot.family_settings,
+    aiPlan: snapshot.ai_plan,
+    tasks: snapshot.session_tasks,
+    questions: snapshot.quick_check_questions,
+    answers: snapshot.quick_check_answers,
+    deviceCommands: snapshot.device_commands,
+    managedDevices: snapshot.managed_devices,
+    deviceCommandDeliveries: snapshot.device_command_deliveries,
+    milestones: snapshot.child_milestones,
+    notifications: snapshot.notifications,
+    sessionEvents: snapshot.session_events,
+    subjectSuggestions: snapshot.subject_suggestions,
+    sessionPage: {
+      hasMore: hasMoreSessions,
+      cursor: historySessions.length > 0
+        ? { startsAt: historySessions.at(-1)!.starts_at, id: historySessions.at(-1)!.id }
+        : null,
+    },
+  };
+}
+
 export async function loadFamilyData(ctx: FamilyContext): Promise<FamilyData> {
   assertValidContext(ctx);
   const occurrenceStart = startOfWeek();
   const occurrenceEnd = addLocalDays(occurrenceStart, APP_CONFIG.occurrenceHorizonDays);
   const currentDayEnd = new Date();
   currentDayEnd.setHours(23, 59, 59, 999);
-  const [
-    familyMembersResult,
-    profilesResult,
-    goalsResult,
-    sessionsResult,
-    scheduleResult,
-    occurrencesResult,
-    exceptionsResult,
-    settingsResult,
-    aiPlanResult,
-    questionsResult,
-    commandsResult,
-    managedDevicesResult,
-    commandDeliveriesResult,
-    milestonesResult,
-    notificationsResult,
-    subjectSuggestionsResult,
-  ] = await Promise.all([
-    supabase.from('family_members').select('profile_id, role, status').eq('family_id', ctx.familyId),
-    supabase.from('profiles').select('id, full_name, avatar_url, role, grade_level, experience_points').in('id', [ctx.parentProfileId, ctx.childProfileId]),
-    supabase.from('learning_goals').select('*').eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId).order('created_at'),
-    supabase.from('learning_sessions').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .lte('starts_at', currentDayEnd.toISOString())
-      .order('starts_at', { ascending: false }).order('id', { ascending: false })
-      .limit(APP_CONFIG.sessionPageSize + 1),
-    supabase.from('schedule_events').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('day_of_week').order('start_time').order('sort_order'),
-    supabase.from('schedule_occurrences').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .gte('occurrence_date', formatLocalDateKey(occurrenceStart))
-      .lte('occurrence_date', formatLocalDateKey(occurrenceEnd))
-      .order('starts_at').limit(APP_CONFIG.occurrenceQueryLimit),
-    supabase.from('exceptions').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }).limit(APP_CONFIG.exceptionPageSize),
-    supabase.from('family_settings').select('*').eq('family_id', ctx.familyId).maybeSingle(),
-    supabase.from('ai_plans').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }).limit(1).maybeSingle(),
-    supabase.from('quick_check_questions')
-      .select('id, family_id, subject, prompt, options, active, sort_order, created_at, updated_at')
-      .eq('family_id', ctx.familyId).eq('active', true).order('sort_order'),
-    supabase.from('device_commands').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }).limit(APP_CONFIG.deviceCommandPageSize),
-    supabase.from('managed_devices').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }),
-    supabase.from('device_command_deliveries').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }).limit(APP_CONFIG.deviceDeliveryPageSize),
-    supabase.from('child_milestones').select('*')
-      .eq('family_id', ctx.familyId).eq('child_profile_id', ctx.childProfileId)
-      .order('created_at', { ascending: false }).limit(APP_CONFIG.milestonePageSize),
-    supabase.from('notifications').select('*')
-      .eq('family_id', ctx.familyId).eq('recipient_id', ctx.parentProfileId)
-      .order('created_at', { ascending: false }).limit(APP_CONFIG.notificationPageSize),
-    supabase.rpc('get_subject_suggestions', { p_child_profile_id: ctx.childProfileId }),
-  ]);
-
-  const results = [
-    ['Không tải được liên kết tài khoản', familyMembersResult.error],
-    ['Không tải được hồ sơ', profilesResult.error],
-    ['Không tải được mục tiêu', goalsResult.error],
-    ['Không tải được buổi học', sessionsResult.error],
-    ['Không tải được lịch học', scheduleResult.error],
-    ['Không tải được lần xuất hiện của lịch', occurrencesResult.error],
-    ['Không tải được ngoại lệ', exceptionsResult.error],
-    ['Không tải được cài đặt', settingsResult.error],
-    ['Không tải được kế hoạch', aiPlanResult.error],
-    ['Không tải được câu hỏi', questionsResult.error],
-    ['Không tải được lệnh thiết bị', commandsResult.error],
-    ['Không tải được thiết bị đã ghép', managedDevicesResult.error],
-    ['Không tải được trạng thái nhận lệnh', commandDeliveriesResult.error],
-    ['Không tải được cột mốc', milestonesResult.error],
-    ['Không tải được thông báo', notificationsResult.error],
-    ['Không tải được gợi ý môn học', subjectSuggestionsResult.error],
-  ] as const;
-  for (const [action, error] of results) throwIfSupabaseError(error, action);
-
-  const members = familyMembersResult.data ?? [];
-  const parentMember = members.find((member) =>
-    member.profile_id === ctx.parentProfileId && member.role === 'parent' && member.status === 'active');
-  const childMember = members.find((member) =>
-    member.profile_id === ctx.childProfileId && member.role === 'child' && member.status === 'active');
-  if (!parentMember || !childMember) throw new Error('Tài khoản không có quyền truy cập hồ sơ của bé này.');
-  const profiles = profilesResult.data ?? [];
-  const parentProfile = profiles.find((profile) => profile.id === ctx.parentProfileId);
-  const childProfile = profiles.find((profile) => profile.id === ctx.childProfileId);
-  if (!parentProfile || !childProfile) throw new Error('Không tìm thấy hồ sơ phụ huynh hoặc trẻ.');
-
-  const sessionRows = (sessionsResult.data ?? []) as LearningSessionRow[];
-  const hasMoreSessions = sessionRows.length > APP_CONFIG.sessionPageSize;
-  const sessions = sessionRows.slice(0, APP_CONFIG.sessionPageSize);
-  const { tasks, answers, sessionEvents } = await loadSessionDetails(sessions);
-  const data: FamilyData = {
-    parent: parentProfile,
-    child: childProfile,
-    goals: goalsResult.data ?? [],
-    sessions,
-    schedule: sortScheduleEvents((scheduleResult.data ?? []) as ScheduleEventRow[]),
-    occurrences: occurrencesResult.data ?? [],
-    exceptions: exceptionsResult.data ?? [],
-    settings: settingsResult.data,
-    aiPlan: aiPlanResult.data,
-    tasks,
-    questions: questionsResult.data ?? [],
-    answers,
-    deviceCommands: commandsResult.data ?? [],
-    managedDevices: managedDevicesResult.data ?? [],
-    deviceCommandDeliveries: commandDeliveriesResult.data ?? [],
-    milestones: milestonesResult.data ?? [],
-    notifications: notificationsResult.data ?? [],
-    sessionEvents,
-    subjectSuggestions: (subjectSuggestionsResult.data ?? []) as SubjectSuggestionRow[],
-    sessionPage: {
-      hasMore: hasMoreSessions,
-      cursor: sessions.length > 0
-        ? { startsAt: sessions.at(-1)!.starts_at, id: sessions.at(-1)!.id }
-        : null,
-    },
-  };
-  void dispatchPendingDeviceCommands(data.deviceCommands);
-  return data;
+  const { data, error } = await supabase.rpc('get_child_dashboard_snapshot', {
+    p_family_id: ctx.familyId,
+    p_child_profile_id: ctx.childProfileId,
+    p_session_end: currentDayEnd.toISOString(),
+    p_occurrence_start: formatLocalDateKey(occurrenceStart),
+    p_occurrence_end: formatLocalDateKey(occurrenceEnd),
+    p_session_limit: APP_CONFIG.sessionPageSize + 1,
+    p_occurrence_limit: APP_CONFIG.occurrenceQueryLimit,
+    p_exception_limit: APP_CONFIG.exceptionPageSize,
+    p_device_command_limit: APP_CONFIG.deviceCommandPageSize,
+    p_device_delivery_limit: APP_CONFIG.deviceDeliveryPageSize,
+    p_milestone_limit: APP_CONFIG.milestonePageSize,
+    p_notification_limit: APP_CONFIG.notificationPageSize,
+  });
+  throwIfSupabaseError(error, 'Không tải được snapshot dashboard');
+  return parseDashboardSnapshot(data, ctx);
 }
 
 export async function loadMoreSessionHistory(
@@ -230,10 +239,37 @@ export async function loadMoreSessionHistory(
 export function subscribeToChildChanges(ctx: FamilyContext, onChange: () => void): () => void {
   const childFilter = `child_profile_id=eq.${ctx.childProfileId}`;
   let debounceTimer: number | undefined;
+  let pollTimer: number | undefined;
+  let stopped = false;
   const invalidate = () => {
+    if (stopped || document.visibilityState === 'hidden') return;
     window.clearTimeout(debounceTimer);
     debounceTimer = window.setTimeout(onChange, APP_CONFIG.realtimeDebounceMs);
   };
+
+  const startPolling = () => {
+    if (pollTimer !== undefined || stopped) return;
+    pollTimer = window.setInterval(invalidate, APP_CONFIG.realtimeFallbackPollMs);
+  };
+  const stopPolling = () => {
+    window.clearInterval(pollTimer);
+    pollTimer = undefined;
+  };
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === 'visible') invalidate();
+  };
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+
+  if (!APP_CONFIG.realtimeEnabled) {
+    startPolling();
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearTimeout(debounceTimer);
+      stopPolling();
+    };
+  }
+
   try {
     const channel = supabase.channel(`child-${ctx.childProfileId}`)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'learning_sessions', filter: childFilter }, invalidate)
@@ -242,17 +278,28 @@ export function subscribeToChildChanges(ctx: FamilyContext, onChange: () => void
       .on('postgres_changes', { event: '*', schema: 'public', table: 'learning_goals', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'exceptions', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'device_commands', filter: childFilter }, invalidate)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'managed_devices', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'device_command_deliveries', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'ai_plans', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'child_milestones', filter: childFilter }, invalidate)
       .on('postgres_changes', { event: '*', schema: 'public', table: 'notifications', filter: `recipient_id=eq.${ctx.parentProfileId}` }, invalidate)
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') stopPolling();
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') startPolling();
+      });
     return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.clearTimeout(debounceTimer);
+      stopPolling();
       void supabase.removeChannel(channel);
     };
   } catch {
-    return () => window.clearTimeout(debounceTimer);
+    startPolling();
+    return () => {
+      stopped = true;
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.clearTimeout(debounceTimer);
+      stopPolling();
+    };
   }
 }

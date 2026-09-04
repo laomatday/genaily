@@ -73,6 +73,7 @@ export interface FamilyData {
   goals: LearningGoalRow[];
   sessions: LearningSessionRow[];
   schedule: ScheduleEventRow[];
+  scheduleVersion: string;
   occurrences: ScheduleOccurrenceRow[];
   exceptions: ExceptionRow[];
   settings: FamilySettingsRow | null;

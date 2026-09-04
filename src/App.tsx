@@ -4,7 +4,8 @@ import { ChildSelectionScreen } from './components/ChildSelectionScreen';
 import { EntryModeScreen } from './components/EntryModeScreen';
 import { AppLogo } from './components/AppLogo';
 import { ParentGate } from './components/ParentGate';
-import { useAuth } from './hooks/useAuth';
+import { useAuth, type AuthState } from './hooks/useAuth';
+import type { User } from '@supabase/supabase-js';
 import { contextFromAccountChild, useAccountChildren, type AccountChild } from './hooks/useAccountChildren';
 import { useFamilyData } from './hooks/useFamilyData';
 import {
@@ -100,11 +101,19 @@ function LoadingScreen({ label }: { label: string }) {
   );
 }
 
-export default function App() {
-  const auth = useAuth();
+type AuthenticatedAuthState = Omit<AuthState, 'user' | 'loading'> & {
+  user: User;
+  loading: false;
+};
+
+function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
   const accountChildren = useAccountChildren(auth.user);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
-  const [context, setContext] = useState<FamilyContext | null>(() => loadPersistedFamilyContext());
+  // This component is keyed by account ID. Restore only that account's
+  // context; the legacy unscoped key may contain another signed-in account.
+  const [context, setContext] = useState<FamilyContext | null>(() => (
+    loadPersistedFamilyContext(auth.user.id)
+  ));
   const [role, setRole] = useState<'parent' | 'child'>('parent');
   const [modeCheckState, setModeCheckState] = useState<'idle' | 'checking' | 'ready' | 'error'>('idle');
   const [modeCheckGeneration, setModeCheckGeneration] = useState(0);
@@ -112,14 +121,18 @@ export default function App() {
   const [entryModeInitialStep, setEntryModeInitialStep] = useState<'mode' | 'child'>('mode');
   const [parentGateOpen, setParentGateOpen] = useState(false);
   const [modeError, setModeError] = useState<string | null>(null);
+  const authUserId = auth.user.id;
+  // localStorage is user-controlled and the legacy global context key may be
+  // stale. A family context is usable only when its parent profile belongs to
+  // the currently authenticated account.
+  const activeContext = context?.parentProfileId === authUserId ? context : null;
   const familyState = useFamilyData(
-    modeCheckState === 'ready' && !onboardingRequired ? context : null,
+    modeCheckState === 'ready' && !onboardingRequired ? activeContext : null,
     role,
   );
-  const authUserId = auth.user?.id;
-  const contextFamilyId = context?.familyId;
-  const contextParentId = context?.parentProfileId;
-  const contextChildId = context?.childProfileId;
+  const contextFamilyId = activeContext?.familyId;
+  const contextParentId = activeContext?.parentProfileId;
+  const contextChildId = activeContext?.childProfileId;
 
   // Keep the selected child synchronized with the account's managed profiles.
   useEffect(() => {
@@ -319,7 +332,7 @@ export default function App() {
   }, [authUserId]);
 
   const handleChildSelected = (newContext: FamilyContext) => {
-    if (!isFamilyContext(newContext)) return;
+    if (!isFamilyContext(newContext) || newContext.parentProfileId !== authUserId) return;
     setContext(newContext);
     setChildPickerOpen(false);
     if (authUserId) persistFamilyContext(authUserId, newContext);
@@ -341,10 +354,10 @@ export default function App() {
   };
 
   const handleSwitchToChild = async () => {
-    if (!context || !authUserId) return;
+    if (!activeContext) return;
     setModeError(null);
     try {
-      await enterChildMode(context);
+      await enterChildMode(activeContext);
       persistDeviceSetup(authUserId, 'child');
       persistMode('child');
       setParentGateOpen(false);
@@ -364,11 +377,11 @@ export default function App() {
     }
     persistDeviceSetup(authUserId, 'parent');
     persistMode('parent');
-    const currentChild = context
+    const currentChild = activeContext
       ? accountChildren.children.find((child) => (
-        child.account_space_id === context.familyId
-        && child.parent_profile_id === context.parentProfileId
-        && child.child_profile_id === context.childProfileId
+        child.account_space_id === activeContext.familyId
+        && child.parent_profile_id === activeContext.parentProfileId
+        && child.child_profile_id === activeContext.childProfileId
       ))
       : undefined;
     // This default is allowed only immediately after the user explicitly
@@ -440,8 +453,6 @@ export default function App() {
     return undefined;
   }, [familyState.data]);
 
-  if (auth.loading) return <LoadingScreen label="Đang kiểm tra đăng nhập…" />;
-  if (!auth.user) return <AuthScreen auth={auth} onAuthSuccess={() => undefined} />;
   if (modeCheckState === 'checking' || modeCheckState === 'idle') {
     return <LoadingScreen label="Đang xác minh chế độ ứng dụng…" />;
   }
@@ -456,7 +467,7 @@ export default function App() {
       </main>
     );
   }
-  if (accountChildren.loading && (!context || onboardingRequired)) {
+  if (accountChildren.loading && (!activeContext || onboardingRequired)) {
     return <LoadingScreen label="Đang tải danh sách con…" />;
   }
 
@@ -475,7 +486,7 @@ export default function App() {
     );
   }
 
-  if (!context || childPickerOpen) {
+  if (!activeContext || childPickerOpen) {
     if (role === 'child') {
       return (
         <>
@@ -529,7 +540,7 @@ export default function App() {
       accountEmail={auth.user.email}
       children={accountChildren.children}
       childrenError={accountChildren.error}
-      selectedChildId={context.childProfileId}
+      selectedChildId={activeContext.childProfileId}
       currentSession={currentSession}
       saving={familyState.saving}
       loadingMore={familyState.loadingMore}
@@ -558,7 +569,7 @@ export default function App() {
   ) : (
     <>
       <ChildApp
-        key={`${context.familyId}:${currentSession?.id ?? 'none'}`}
+        key={`${activeContext.familyId}:${currentSession?.id ?? 'none'}`}
         data={familyState.data}
         currentSession={currentSession}
         saving={familyState.saving}
@@ -590,4 +601,22 @@ export default function App() {
     </>
   );
   return <Suspense fallback={<LoadingScreen label="Đang mở giao diện…" />}>{application}</Suspense>;
+}
+
+export default function App() {
+  const auth = useAuth();
+
+  if (auth.loading) return <LoadingScreen label="Đang kiểm tra đăng nhập…" />;
+  if (!auth.user) return <AuthScreen auth={auth} onAuthSuccess={() => undefined} />;
+
+  // Supabase auth is shared between tabs and can transition directly from
+  // account A to B without an intermediate signed-out render. Remount every
+  // account-scoped hook/state atomically so no cached child or family payload
+  // from A can be rendered under B's identity, even for one frame.
+  return (
+    <AuthenticatedApp
+      key={auth.user.id}
+      auth={auth as AuthenticatedAuthState}
+    />
+  );
 }

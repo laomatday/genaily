@@ -7,6 +7,28 @@ const MAX_BODY_BYTES = 32 * 1024;
 const COMMAND_LIMIT = 20;
 const REDELIVERY_SECONDS = 30;
 
+function boundedIntegerEnv(name: string, fallback: number, minimum: number, maximum: number): number {
+  const parsed = Number(Deno.env.get(name) ?? fallback);
+  return Number.isInteger(parsed) && parsed >= minimum && parsed <= maximum
+    ? parsed
+    : fallback;
+}
+
+const HEARTBEAT_WRITE_SECONDS = boundedIntegerEnv(
+  'DEVICE_HEARTBEAT_WRITE_SECONDS',
+  60,
+  10,
+  600,
+);
+const HEARTBEAT_TIMEOUT_SECONDS = boundedIntegerEnv(
+  'DEVICE_HEARTBEAT_TIMEOUT_SECONDS',
+  180,
+  30,
+  3600,
+);
+
+class ServiceUnavailableError extends Error {}
+
 type ServiceClient = ReturnType<typeof createClient>;
 type JsonRecord = Record<string, unknown>;
 type ManagedDevice = {
@@ -71,12 +93,13 @@ async function authenticateDevice(client: ServiceClient, request: Request): Prom
     .eq('token_hash', tokenHash)
     .eq('status', 'active')
     .maybeSingle();
-  if (error || !data) return null;
+  if (error) throw new ServiceUnavailableError('Không xác minh được thiết bị.');
+  if (!data) return null;
   return data as ManagedDevice;
 }
 
 async function latestDesiredState(client: ServiceClient, device: ManagedDevice) {
-  const { data } = await client
+  const { data, error } = await client
     .from('device_commands')
     .select('id, command, policy, created_at')
     .eq('family_id', device.family_id)
@@ -84,6 +107,7 @@ async function latestDesiredState(client: ServiceClient, device: ManagedDevice) 
     .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle();
+  if (error) throw new ServiceUnavailableError('Không xác minh được trạng thái Study Lock.');
   return data
     ? { command_id: data.id, state: data.command, policy: data.policy, changed_at: data.created_at }
     : { command_id: null, state: 'unlock', policy: null, changed_at: null };
@@ -104,12 +128,29 @@ async function pairDevice(client: ServiceClient, payload: JsonRecord) {
     .eq('status', 'pairing')
     .gt('pairing_expires_at', new Date().toISOString())
     .maybeSingle();
-  if (findError || !pending) {
+  if (findError) {
+    throw new ServiceUnavailableError('Không xác minh được mã ghép thiết bị.');
+  }
+  if (!pending) {
     return respond({ error: 'Mã ghép không hợp lệ hoặc đã hết hạn.' }, 404);
   }
   if (payload.platform !== pending.platform) {
     return respond({ error: 'Mã ghép không dành cho nền tảng này.' }, 409);
   }
+
+  const device = {
+    id: pending.id,
+    family_id: pending.family_id,
+    child_profile_id: pending.child_profile_id,
+    platform: pending.platform,
+    status: 'active' as const,
+    policy: pending.policy as JsonRecord,
+    policy_version: pending.policy_version,
+  };
+  // Resolve the desired state before consuming the one-time pairing code. A
+  // transient database failure must neither activate an unreachable device nor
+  // fabricate an `unlock` state.
+  const desired = await latestDesiredState(client, device);
 
   const rawToken = randomToken();
   const tokenHash = await sha256(rawToken);
@@ -132,16 +173,6 @@ async function pairDevice(client: ServiceClient, payload: JsonRecord) {
     return respond({ error: 'Mã ghép đã được sử dụng.' }, 409);
   }
 
-  const device = {
-    id: pending.id,
-    family_id: pending.family_id,
-    child_profile_id: pending.child_profile_id,
-    platform: pending.platform,
-    status: 'active' as const,
-    policy: pending.policy as JsonRecord,
-    policy_version: pending.policy_version,
-  };
-  const desired = await latestDesiredState(client, device);
   if (desired.command_id) {
     await client.from('device_command_deliveries').upsert({
       command_id: desired.command_id,
@@ -163,79 +194,27 @@ async function pairDevice(client: ServiceClient, payload: JsonRecord) {
 
 async function pollCommands(client: ServiceClient, device: ManagedDevice) {
   const now = new Date();
-  const staleDelivery = new Date(now.getTime() - REDELIVERY_SECONDS * 1000).toISOString();
-  await client.from('managed_devices').update({ last_seen_at: now.toISOString() }).eq('id', device.id);
+  const desired = await latestDesiredState(client, device);
+  const { error: heartbeatError } = await client.rpc('touch_managed_device_heartbeat', {
+    p_device_id: device.id,
+    p_min_interval_seconds: HEARTBEAT_WRITE_SECONDS,
+  });
+  if (heartbeatError) throw new ServiceUnavailableError('Không ghi nhận được heartbeat thiết bị.');
 
-  const { data: candidates, error: deliveryError } = await client
-    .from('device_command_deliveries')
-    .select('id, command_id, status, attempt_count, max_attempts, next_attempt_at, delivered_at')
-    .eq('device_id', device.id)
-    .in('status', ['queued', 'failed', 'delivered'])
-    .order('created_at', { ascending: true })
-    .limit(COMMAND_LIMIT * 2);
-  if (deliveryError) return respond({ error: 'Không tải được lệnh thiết bị.' }, 500);
-
-  const due = (candidates ?? []).filter((delivery) => (
-    delivery.attempt_count < delivery.max_attempts
-    && (
-      ((delivery.status === 'queued' || delivery.status === 'failed')
-        && new Date(delivery.next_attempt_at).getTime() <= now.getTime())
-      || (delivery.status === 'delivered'
-        && delivery.delivered_at !== null
-        && delivery.delivered_at <= staleDelivery)
-    )
-  )).slice(0, COMMAND_LIMIT);
-
-  const claimedDeliveryIds: string[] = [];
-  for (const delivery of due) {
-    const nextAttempt = new Date(now.getTime() + REDELIVERY_SECONDS * 1000).toISOString();
-    const { data: claimed } = await client
-      .from('device_command_deliveries')
-      .update({
-        status: 'delivered',
-        delivered_at: now.toISOString(),
-        attempt_count: delivery.attempt_count + 1,
-        next_attempt_at: nextAttempt,
-        error_message: null,
-      })
-      .eq('id', delivery.id)
-      .eq('attempt_count', delivery.attempt_count)
-      .select('id')
-      .maybeSingle();
-    if (claimed) claimedDeliveryIds.push(delivery.id);
-  }
-
-  let commands: Array<Record<string, unknown>> = [];
-  if (claimedDeliveryIds.length > 0) {
-    const { data: claimedDeliveries } = await client
-      .from('device_command_deliveries')
-      .select('id, command_id')
-      .in('id', claimedDeliveryIds);
-    const commandIds = (claimedDeliveries ?? []).map((item) => item.command_id);
-    const { data: commandRows } = await client
-      .from('device_commands')
-      .select('id, command, policy, session_id, created_at, idempotency_key')
-      .in('id', commandIds);
-    const deliveryByCommand = new Map((claimedDeliveries ?? []).map((item) => [item.command_id, item.id]));
-    commands = (commandRows ?? []).map((command) => ({
-      delivery_id: deliveryByCommand.get(command.id),
-      ...command,
-    }));
-    await client.from('device_commands').update({
-      status: 'sent',
-      external_id: `companion:${device.id}`,
-      processed_at: now.toISOString(),
-      error_message: null,
-    }).in('id', commandIds).in('status', ['queued', 'processing', 'failed', 'configuration_required']);
-  }
+  const { data: commands, error: claimError } = await client.rpc('claim_device_deliveries', {
+    p_device_id: device.id,
+    p_limit: COMMAND_LIMIT,
+    p_redelivery_seconds: REDELIVERY_SECONDS,
+  });
+  if (claimError) throw new ServiceUnavailableError('Không tải được lệnh thiết bị.');
 
   return respond({
     server_time: now.toISOString(),
-    heartbeat_timeout_seconds: Number(Deno.env.get('DEVICE_HEARTBEAT_TIMEOUT_SECONDS') ?? 180),
+    heartbeat_timeout_seconds: HEARTBEAT_TIMEOUT_SECONDS,
     policy: device.policy,
     policy_version: device.policy_version,
-    desired: await latestDesiredState(client, device),
-    commands,
+    desired,
+    commands: commands ?? [],
   });
 }
 
@@ -280,7 +259,10 @@ async function acknowledgeCommand(client: ServiceClient, device: ManagedDevice, 
     processed_at: allAcknowledged ? now.toISOString() : undefined,
     error_message: aggregateStatus === 'failed' ? errorMessage : null,
   }).eq('id', commandId);
-  await client.from('managed_devices').update({ last_seen_at: now.toISOString() }).eq('id', device.id);
+  await client.rpc('touch_managed_device_heartbeat', {
+    p_device_id: device.id,
+    p_min_interval_seconds: HEARTBEAT_WRITE_SECONDS,
+  });
   return respond({ command_id: commandId, status: requestedStatus });
 }
 
@@ -308,6 +290,9 @@ Deno.serve(async (request) => {
   } catch (error) {
     if (error instanceof Error && error.message === 'REQUEST_TOO_LARGE') {
       return respond({ error: 'Yêu cầu vượt quá dung lượng cho phép.' }, 413);
+    }
+    if (error instanceof ServiceUnavailableError) {
+      return respond({ error: error.message }, 503);
     }
     return respond({ error: 'Yêu cầu không hợp lệ.' }, 400);
   }

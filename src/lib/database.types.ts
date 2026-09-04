@@ -1432,6 +1432,21 @@ export type Database = {
           resets_at: string
         }[]
       }
+      claim_ai_generation_lease: {
+        Args: {
+          p_child_profile_id: string
+          p_family_id: string
+          p_max_concurrency?: number
+          p_request_id: string
+          p_ttl_seconds?: number
+          p_user_id: string
+        }
+        Returns: {
+          expires_at: string
+          lease_token: string
+          slot_number: number
+        }[]
+      }
       claim_device_command: {
         Args: { p_command_id: string }
         Returns: boolean
@@ -1490,6 +1505,45 @@ export type Database = {
         Args: Record<PropertyKey, never>
         Returns: boolean
       }
+      can_access_child_context: {
+        Args: { p_child_profile_id: string; p_family_id: string }
+        Returns: boolean
+      }
+      get_child_dashboard_snapshot: {
+        Args: {
+          p_child_profile_id: string
+          p_device_command_limit?: number
+          p_device_delivery_limit?: number
+          p_exception_limit?: number
+          p_family_id: string
+          p_milestone_limit?: number
+          p_notification_limit?: number
+          p_occurrence_end: string
+          p_occurrence_limit?: number
+          p_occurrence_start: string
+          p_session_end: string
+          p_session_limit?: number
+        }
+        Returns: Json
+      }
+      get_quick_check_questions: {
+        Args: {
+          p_child_profile_id: string
+          p_family_id: string
+          p_limit?: number
+        }
+        Returns: {
+          active: boolean
+          created_at: string
+          family_id: string
+          id: string
+          options: Json
+          prompt: string
+          sort_order: number
+          subject: string
+          updated_at: string
+        }[]
+      }
       get_subject_suggestions: {
         Args: { p_child_profile_id: string }
         Returns: {
@@ -1524,6 +1578,10 @@ export type Database = {
         Args: { p_minutes?: number; p_session_id: string }
         Returns: string
       }
+      release_ai_generation_lease: {
+        Args: { p_lease_token: string }
+        Returns: boolean
+      }
       revoke_managed_device: {
         Args: { p_device_id: string }
         Returns: boolean
@@ -1546,6 +1604,15 @@ export type Database = {
         Args: {
           p_child_profile_id: string
           p_events: Json
+          p_family_id: string
+        }
+        Returns: number
+      }
+      save_schedule_setup_v2: {
+        Args: {
+          p_child_profile_id: string
+          p_events: Json
+          p_expected_version: string
           p_family_id: string
         }
         Returns: number

@@ -3,6 +3,11 @@ function positiveInteger(value: string | undefined, fallback: number): number {
   return Number.isInteger(parsed) && parsed > 0 ? parsed : fallback;
 }
 
+function booleanValue(value: string | undefined, fallback: boolean): boolean {
+  if (value === undefined || value === '') return fallback;
+  return value === 'true';
+}
+
 export const APP_CONFIG = Object.freeze({
   sessionPageSize: positiveInteger(import.meta.env.VITE_SESSION_PAGE_SIZE, 20),
   exceptionPageSize: positiveInteger(import.meta.env.VITE_EXCEPTION_PAGE_SIZE, 20),
@@ -14,7 +19,11 @@ export const APP_CONFIG = Object.freeze({
   defaultRewardPoints: positiveInteger(import.meta.env.VITE_DEFAULT_REWARD_POINTS, 500),
   occurrenceHorizonDays: positiveInteger(import.meta.env.VITE_OCCURRENCE_HORIZON_DAYS, 8),
   occurrenceQueryLimit: positiveInteger(import.meta.env.VITE_OCCURRENCE_QUERY_LIMIT, 800),
+  // Polling is the safe default on Supabase Free: its 200 Realtime connection
+  // ceiling has no headroom when 200 accounts are online at once.
+  realtimeEnabled: booleanValue(import.meta.env.VITE_REALTIME_ENABLED, false),
   realtimeDebounceMs: positiveInteger(import.meta.env.VITE_REALTIME_DEBOUNCE_MS, 180),
+  realtimeFallbackPollMs: positiveInteger(import.meta.env.VITE_REALTIME_FALLBACK_POLL_SECONDS, 30) * 1000,
   deviceClaimLeaseMs: positiveInteger(import.meta.env.VITE_DEVICE_CLAIM_LEASE_MS, 120_000),
   evidenceMaxBytes: positiveInteger(import.meta.env.VITE_EVIDENCE_MAX_BYTES, 10 * 1024 * 1024),
   evidenceSignedUrlSeconds: positiveInteger(import.meta.env.VITE_EVIDENCE_SIGNED_URL_SECONDS, 300),

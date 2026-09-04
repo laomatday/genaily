@@ -44,14 +44,29 @@ beforeEach(() => {
 
 describe('saveScheduleSetup child targeting', () => {
   it('sends the selected second child id to the atomic schedule RPC', async () => {
-    await saveScheduleSetup(secondChildContext, schedule);
+    const expectedVersion = '0123456789abcdef0123456789abcdef';
+    await saveScheduleSetup(secondChildContext, schedule, expectedVersion);
 
     expect(mocks.rpc).toHaveBeenCalledTimes(1);
-    expect(mocks.rpc).toHaveBeenCalledWith('save_schedule_setup', expect.objectContaining({
+    expect(mocks.rpc).toHaveBeenCalledWith('save_schedule_setup_v2', expect.objectContaining({
       p_family_id: secondChildContext.familyId,
       p_child_profile_id: secondChildContext.childProfileId,
+      p_expected_version: expectedVersion,
     }));
     expect(mocks.rpc.mock.calls[0]?.[1]?.p_child_profile_id)
       .not.toBe('10000000-0000-4000-8000-000000000011');
+  });
+
+  it('rejects a stale schedule version with a recoverable message', async () => {
+    mocks.rpc.mockResolvedValueOnce({
+      data: null,
+      error: { message: 'SCHEDULE_VERSION_CONFLICT' },
+    });
+
+    await expect(saveScheduleSetup(
+      secondChildContext,
+      schedule,
+      '0123456789abcdef0123456789abcdef',
+    )).rejects.toThrow('Lịch vừa được thay đổi ở nơi khác');
   });
 });

@@ -342,14 +342,25 @@ export async function createException(ctx: FamilyContext, input: CreateException
   throwIfSupabaseError(error, 'Không tạo được ngoại lệ');
 }
 
-export async function saveScheduleSetup(ctx: FamilyContext, events: ScheduleSetupItem[]): Promise<void> {
+export async function saveScheduleSetup(
+  ctx: FamilyContext,
+  events: ScheduleSetupItem[],
+  expectedVersion: string,
+): Promise<void> {
   assertValidContext(ctx);
   validateScheduleSetup(events);
-  const { error } = await supabase.rpc('save_schedule_setup', {
+  if (!/^[0-9a-f]{32}$/.test(expectedVersion)) {
+    throw new Error('Phiên bản lịch không hợp lệ. Vui lòng tải lại.');
+  }
+  const { error } = await supabase.rpc('save_schedule_setup_v2', {
     p_family_id: ctx.familyId,
     p_child_profile_id: ctx.childProfileId,
     p_events: normalizeScheduleOrder(events) as unknown as Json,
+    p_expected_version: expectedVersion,
   });
+  if (error?.message.includes('SCHEDULE_VERSION_CONFLICT')) {
+    throw new Error('Lịch vừa được thay đổi ở nơi khác. Dữ liệu mới đã được tải lại; hãy kiểm tra rồi lưu lại.');
+  }
   throwIfSupabaseError(error, 'Không lưu được lịch hoạt động');
 }
 interface GeneratePlanResponse { plan: AiPlanRow }

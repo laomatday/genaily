@@ -17,12 +17,37 @@ if (!/^https?:\/\/(127\.0\.0\.1|localhost)(:\d+)?\/?$/i.test(apiUrl)
 const admin = createClient(apiUrl, serviceRoleKey, {
   auth: { persistSession: false, autoRefreshToken: false },
 });
+
+async function deleteExistingFixture(userId) {
+  const memberships = await admin.from('family_members')
+    .select('family_id')
+    .eq('profile_id', userId)
+    .eq('role', 'parent');
+  if (memberships.error) throw memberships.error;
+  const familyIds = [...new Set((memberships.data ?? []).map((item) => item.family_id))];
+  let childIds = [];
+  if (familyIds.length > 0) {
+    const children = await admin.from('family_members')
+      .select('profile_id')
+      .in('family_id', familyIds)
+      .eq('role', 'child');
+    if (children.error) throw children.error;
+    childIds = (children.data ?? []).map((item) => item.profile_id);
+    const families = await admin.from('families').delete().in('id', familyIds);
+    if (families.error) throw families.error;
+  }
+  const profileIds = [...new Set([userId, ...childIds])];
+  const profiles = await admin.from('profiles').delete().in('id', profileIds);
+  if (profiles.error) throw profiles.error;
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) throw error;
+}
+
 const { data: listed, error: listError } = await admin.auth.admin.listUsers({ perPage: 1000 });
 if (listError) throw listError;
 const existing = listed.users.find((user) => user.email === email);
 if (existing) {
-  const { error } = await admin.auth.admin.deleteUser(existing.id);
-  if (error) throw error;
+  await deleteExistingFixture(existing.id);
 }
 
 const { error: createError } = await admin.auth.admin.createUser({
