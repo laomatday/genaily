@@ -1,10 +1,18 @@
-import {StrictMode} from 'react';
-import {createRoot} from 'react-dom/client';
-import App from './App.tsx';
-import './index.css';
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import App, { ErrorBoundary } from './App';
+import { ThemeProvider } from './hooks/useTheme';
+import './style.css';
 
-createRoot(document.getElementById('root')!).render(
+const root = document.getElementById('root');
+if (!root) throw new Error('Không tìm thấy phần tử #root.');
+
+createRoot(root).render(
   <StrictMode>
-    <App />
+    <ThemeProvider>
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
+    </ThemeProvider>
   </StrictMode>,
 );

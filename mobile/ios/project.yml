@@ -1,0 +1,34 @@
+name: GenAiFamilyDevice
+options:
+  bundleIdPrefix: app.genaifamily
+  deploymentTarget:
+    iOS: "16.0"
+configs:
+  Debug: debug
+  Release: release
+settings:
+  base:
+    SWIFT_VERSION: "6.0"
+    CODE_SIGN_STYLE: Automatic
+    DEVELOPMENT_TEAM: ""
+  configs:
+    Debug:
+      baseConfiguration: Config/Config.xcconfig
+    Release:
+      baseConfiguration: Config/Config.xcconfig
+targets:
+  GenAiFamilyDevice:
+    type: application
+    platform: iOS
+    sources:
+      - path: GenAiFamilyDevice
+    info:
+      path: GenAiFamilyDevice/Info.plist
+    entitlements:
+      path: GenAiFamilyDevice/GenAiFamilyDevice.entitlements
+    settings:
+      base:
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        PRODUCT_BUNDLE_IDENTIFIER: app.genaifamily.device
+        PRODUCT_NAME: genAi Family Device
+        INFOPLIST_KEY_CFBundleDisplayName: genAi Family Device

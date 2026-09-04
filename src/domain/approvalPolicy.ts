@@ -1,21 +1,33 @@
-import { LearningSession } from '../types';
+import type { ApprovalPolicy } from '../types';
 
-export type ApprovalPolicyResult = 
-  | 'PARENT_REQUIRED'
-  | 'AUTO_APPROVE'
-  | 'EVIDENCE_REQUIRED'
-  | 'PARENT_OR_TIMEOUT'
-  | 'MANUAL_REVIEW';
+export interface ApprovalFacts {
+  policy: ApprovalPolicy;
+  tasksDone: number;
+  tasksTotal: number;
+  quickCheckScore: number;
+  quickCheckTotal: number;
+  hasEvidence: boolean;
+}
 
-export function resolveApprovalPolicy(session: LearningSession): ApprovalPolicyResult {
-  if (session.approvalPolicy === 'auto_approve') {
-    return 'AUTO_APPROVE';
+export type ApprovalDecision =
+  | { status: 'approved'; reason: 'auto_policy' | 'evidence_policy' }
+  | { status: 'awaiting_parent'; reason: 'parent_required' | 'incomplete' | 'evidence_missing' };
+
+export function resolveApprovalPolicy(facts: ApprovalFacts): ApprovalDecision {
+  const tasksComplete = facts.tasksTotal > 0 && facts.tasksDone === facts.tasksTotal;
+  const quickCheckPassed = facts.quickCheckTotal === 0
+    || facts.quickCheckScore / facts.quickCheckTotal >= 0.8;
+
+  if (!tasksComplete || !quickCheckPassed) {
+    return { status: 'awaiting_parent', reason: 'incomplete' };
   }
-  if (session.reflection === 'hard' || (session.quickCheckResult && session.quickCheckResult.startsWith('3/5'))) {
-    return 'PARENT_REQUIRED';
+  if (facts.policy === 'auto_approve') {
+    return { status: 'approved', reason: 'auto_policy' };
   }
-  if (session.approvalPolicy === 'evidence_required' && !session.evidencePhoto) {
-    return 'EVIDENCE_REQUIRED';
+  if (facts.policy === 'evidence_required') {
+    return facts.hasEvidence
+      ? { status: 'approved', reason: 'evidence_policy' }
+      : { status: 'awaiting_parent', reason: 'evidence_missing' };
   }
-  return 'PARENT_REQUIRED';
+  return { status: 'awaiting_parent', reason: 'parent_required' };
 }

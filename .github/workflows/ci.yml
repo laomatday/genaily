@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  application:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npx playwright install --with-deps chromium
+      - run: npm run test:e2e
+
+  database:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx supabase start -x studio,imgproxy,edge-runtime,logflare,vector,supavisor
+      - run: npx supabase db reset --local
+      - run: npx supabase test db
+      - run: npx playwright install --with-deps chromium
+      - name: Run authenticated end-to-end flows against local Supabase
+        shell: bash
+        run: |
+          eval "$(npx supabase status -o env)"
+          export E2E_SUPABASE_URL="$API_URL"
+          export E2E_SUPABASE_PUBLISHABLE_KEY="$ANON_KEY"
+          export E2E_SUPABASE_SERVICE_ROLE_KEY="$SERVICE_ROLE_KEY"
+          export E2E_PARENT_EMAIL="parent-e2e@example.test"
+          export E2E_PARENT_PASSWORD="E2e-only-password-2026!"
+          export E2E_CHILD_NAME="Bé E2E A"
+          export E2E_SECOND_CHILD_NAME="Bé E2E B"
+          export E2E_ALLOW_DATA_MUTATION="true"
+          npm run seed:e2e
+          npm run test:e2e

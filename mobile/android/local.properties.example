@@ -1,0 +1,4 @@
+# Copy to local.properties and fill from the web app's .env.local.
+sdk.dir=/absolute/path/to/Android/Sdk
+GENAI_DEVICE_AGENT_URL=https://PROJECT_REF.supabase.co/functions/v1/device-agent
+GENAI_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME

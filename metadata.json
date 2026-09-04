@@ -1,6 +1,6 @@
 {
   "name": "genAi Family",
-  "description": "Learning Autopilot system for families with domain-driven architecture, Study Lock, Approval Engine, Smart Week, and Exceptions inbox.",
+  "description": "Theo dõi lịch học, sinh hoạt và tiến độ của trẻ.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

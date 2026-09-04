@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">genAi Family Device</string>
+    <string name="accessibility_service_label">Study Lock</string>
+    <string name="accessibility_service_description">Chỉ nhận biết ứng dụng đang mở để hiện màn chắn với các ứng dụng mà phụ huynh và trẻ đã chọn trong giờ học. Dịch vụ không đọc nội dung, không nhập liệu và không thu thập mật khẩu.</string>
+    <string name="notification_channel_name">Study Lock</string>
+    <string name="notification_title">Study Lock đang sẵn sàng</string>
+    <string name="notification_description">Đang chờ lệnh giờ học từ phụ huynh</string>
+</resources>

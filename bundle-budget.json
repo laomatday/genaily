@@ -1,0 +1,6 @@
+{
+  "maxTotalJavaScriptGzipBytes": 260000,
+  "maxSingleJavaScriptGzipBytes": 190000,
+  "maxStylesheetGzipBytes": 110000,
+  "maxSingleAssetBytes": 600000
+}

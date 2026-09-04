@@ -1,28 +1,21 @@
-import { SessionStatus } from '../types';
+import type { SessionStatus } from '../types';
 
-export const VALID_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
-  SCHEDULED: ['READY', 'EXPIRED'],
-  READY: ['FOCUSING', 'SCHEDULED'],
-  FOCUSING: ['COMPLETING', 'SCHEDULED'],
-  COMPLETING: ['SUBMITTED'],
-  SUBMITTED: ['WAITING_APPROVAL'],
-  WAITING_APPROVAL: ['APPROVED', 'EXTENDED', 'REJECTED', 'AUTO_APPROVED', 'EXPIRED'],
-  APPROVED: ['UNLOCKED'],
-  UNLOCKED: [],
-  EXTENDED: ['FOCUSING'],
-  REJECTED: ['READY', 'SCHEDULED'],
-  AUTO_APPROVED: ['UNLOCKED'],
-  EXPIRED: []
+export const VALID_TRANSITIONS: Readonly<Record<SessionStatus, readonly SessionStatus[]>> = {
+  scheduled: ['in_progress', 'cancelled'],
+  in_progress: ['awaiting_parent', 'approved', 'cancelled'],
+  awaiting_parent: ['approved', 'rejected', 'cancelled'],
+  rejected: ['in_progress', 'cancelled'],
+  approved: ['completed'],
+  completed: [],
+  cancelled: [],
 };
 
 export function canTransition(current: SessionStatus, next: SessionStatus): boolean {
-  const allowed = VALID_TRANSITIONS[current] || [];
-  return allowed.includes(next);
+  return VALID_TRANSITIONS[current].includes(next);
 }
 
-export function transitionSession(current: SessionStatus, next: SessionStatus): SessionStatus {
-  if (canTransition(current, next)) {
-    return next;
+export function assertTransition(current: SessionStatus, next: SessionStatus): void {
+  if (!canTransition(current, next)) {
+    throw new Error(`Không thể chuyển buổi học từ ${current} sang ${next}.`);
   }
-  throw new Error(`Invalid state transition from ${current} to ${next}`);
 }

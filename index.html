@@ -3,19 +3,37 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>genAi Family — Learning Autopilot</title>
-    <meta name="description" content="Learning Autopilot system for families with domain-driven architecture, Study Lock, Approval Engine, Smart Week, and Exceptions inbox." />
-    <meta property="og:title" content="genAi Family — Learning Autopilot" />
-    <meta property="og:description" content="Learning Autopilot system for families with domain-driven architecture, Study Lock, Approval Engine, Smart Week, and Exceptions inbox." />
+    <title>genAi Family — Lịch học và sinh hoạt</title>
+    <meta name="description" content="Theo dõi lịch học, sinh hoạt và tiến độ của trẻ." />
+    <meta property="og:title" content="genAi Family — Lịch học và sinh hoạt" />
+    <meta property="og:description" content="Theo dõi lịch học, sinh hoạt và tiến độ của trẻ." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
-    <meta name="theme-color" content="#243C8F" />
+    <meta name="theme-color" content="__APP_THEME_COLOR__" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="genAiFamily" />
-    <link rel="apple-touch-icon" href="https://lh3.googleusercontent.com/d/1TTJ-7BMnAa6nMfNrMI1DavN64l2Y3VOP" />
-    <link rel="icon" type="image/png" href="https://lh3.googleusercontent.com/d/1TTJ-7BMnAa6nMfNrMI1DavN64l2Y3VOP" />
+    <script>
+      (() => {
+        try {
+          const saved = localStorage.getItem('genai_app_theme');
+          const preference = saved === 'light' || saved === 'dark' || saved === 'system'
+            ? saved
+            : 'system';
+          const theme = preference === 'system'
+            ? matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
+            : preference;
+          document.documentElement.dataset.theme = theme;
+          document.documentElement.dataset.themePreference = preference;
+          document.documentElement.style.colorScheme = theme;
+        } catch {
+          document.documentElement.dataset.theme = 'light';
+        }
+      })();
+    </script>
+    <link rel="icon" type="image/svg+xml" href="/icons/app-icon-any.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/icons/apple-touch-icon-180.png" />
   </head>
   <body>
     <div id="root"></div>

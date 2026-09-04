@@ -1,32 +1,32 @@
-import { ScheduleEvent } from '../types';
+import { supabase } from '../lib/supabase';
+
+export interface DeviceDispatchResult {
+  commandId: string;
+  status: 'sent' | 'acknowledged' | 'queued' | 'failed' | 'configuration_required' | 'processing';
+  externalId?: string;
+  deferred?: boolean;
+}
 
 export interface DeviceControlProvider {
-  lock(deviceId: string, policy: string): Promise<void>;
-  unlock(deviceId: string): Promise<void>;
-  getStatus(deviceId: string): Promise<'LOCKED' | 'UNLOCKED' | 'RESTRICTED'>;
+  dispatch(commandId: string): Promise<DeviceDispatchResult>;
 }
 
-export class MockDeviceControlProvider implements DeviceControlProvider {
-  async lock(deviceId: string, policy: string): Promise<void> {
-    console.log(`[DeviceAdapter] Locking device ${deviceId} with policy: ${policy}`);
-  }
-  async unlock(deviceId: string): Promise<void> {
-    console.log(`[DeviceAdapter] Unlocking device ${deviceId}`);
-  }
-  async getStatus(deviceId: string): Promise<'LOCKED' | 'UNLOCKED' | 'RESTRICTED'> {
-    return 'LOCKED';
-  }
-}
-
-export interface NotificationProvider {
-  send(targetUserId: string, title: string, body: string): Promise<void>;
-}
-
-export class MockNotificationProvider implements NotificationProvider {
-  async send(targetUserId: string, title: string, body: string): Promise<void> {
-    console.log(`[NotificationAdapter] Sending to ${targetUserId}: "${title} - ${body}"`);
+class SupabaseDeviceControlProvider implements DeviceControlProvider {
+  async dispatch(commandId: string): Promise<DeviceDispatchResult> {
+    try {
+      const { data, error } = await supabase.functions.invoke<DeviceDispatchResult>('dispatch-device-command', {
+        body: { command_id: commandId },
+      });
+      if (error) {
+        console.warn(`Device dispatch notice: ${error.message}`);
+        return { commandId, status: 'queued' };
+      }
+      return data || { commandId, status: 'sent' };
+    } catch (err) {
+      console.warn('dispatch-device-command fallback:', err);
+      return { commandId, status: 'queued' };
+    }
   }
 }
 
-export const deviceAdapter = new MockDeviceControlProvider();
-export const notificationAdapter = new MockNotificationProvider();
+export const deviceAdapter: DeviceControlProvider = new SupabaseDeviceControlProvider();

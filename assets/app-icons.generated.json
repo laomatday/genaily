@@ -1,0 +1,114 @@
+{
+  "inputHash": "6c07219a05f96bbd1c5bfc131912af39c1dd13c1d2d89cfe0889af2dce9ffb5d",
+  "artworkScale": "2/3",
+  "pngs": [
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-1024.png",
+      "width": 1024,
+      "height": 1024,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-120.png",
+      "width": 120,
+      "height": 120,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-152.png",
+      "width": 152,
+      "height": 152,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-167.png",
+      "width": 167,
+      "height": 167,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-180.png",
+      "width": 180,
+      "height": 180,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-20.png",
+      "width": 20,
+      "height": 20,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-29.png",
+      "width": 29,
+      "height": 29,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-40.png",
+      "width": 40,
+      "height": 40,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-58.png",
+      "width": 58,
+      "height": 58,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-60.png",
+      "width": 60,
+      "height": 60,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-76.png",
+      "width": 76,
+      "height": 76,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-80.png",
+      "width": 80,
+      "height": 80,
+      "colorType": 2
+    },
+    {
+      "path": "mobile/ios/GenAiFamilyDevice/Assets.xcassets/AppIcon.appiconset/AppIcon-87.png",
+      "width": 87,
+      "height": 87,
+      "colorType": 2
+    },
+    {
+      "path": "public/icons/app-icon-any-192.png",
+      "width": 192,
+      "height": 192,
+      "colorType": 6
+    },
+    {
+      "path": "public/icons/app-icon-any-512.png",
+      "width": 512,
+      "height": 512,
+      "colorType": 6
+    },
+    {
+      "path": "public/icons/app-icon-maskable-192.png",
+      "width": 192,
+      "height": 192,
+      "colorType": 2
+    },
+    {
+      "path": "public/icons/app-icon-maskable-512.png",
+      "width": 512,
+      "height": 512,
+      "colorType": 2
+    },
+    {
+      "path": "public/icons/apple-touch-icon-180.png",
+      "width": 180,
+      "height": 180,
+      "colorType": 2
+    }
+  ]
+}
