@@ -150,7 +150,7 @@ describe('useFamilyData child context isolation', () => {
       return (
         <div>
           <span>{state.data?.child.id ?? (state.loading ? 'loading' : 'empty')}</span>
-          <button type="button" onClick={() => void state.saveSchedule([]).catch(() => undefined)}>
+          <button type="button" onClick={() => void state.saveSchedule([], state.data?.scheduleVersion ?? '').catch(() => undefined)}>
             Lưu
           </button>
         </div>
@@ -386,8 +386,8 @@ describe('useFamilyData child context isolation', () => {
         <div>
           <span>{state.data?.child.id ?? (state.loading ? 'loading' : 'empty')}</span>
           <span data-testid="saving-state">{state.saving ? 'saving' : 'idle'}</span>
-          <button type="button" onClick={() => void state.saveSchedule([])}>Lưu một</button>
-          <button type="button" onClick={() => void state.saveSchedule([])}>Lưu hai</button>
+          <button type="button" onClick={() => void state.saveSchedule([], state.data?.scheduleVersion ?? '')}>Lưu một</button>
+          <button type="button" onClick={() => void state.saveSchedule([], state.data?.scheduleVersion ?? '')}>Lưu hai</button>
         </div>
       );
     }

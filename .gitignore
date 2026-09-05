@@ -10,3 +10,7 @@ test-results/
 *.zip
 .env*
 !.env.example
+
+dist-native/
+android-delivery/
+wrapper-test-output/

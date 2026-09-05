@@ -126,3 +126,9 @@ cho phụ huynh; artifact chỉ dành cho người có quyền truy cập repo.
 - AGP 8.13 compatibility: https://developer.android.com/build/releases/agp-8-13-0-release-notes
 - Android service timeout: https://developer.android.com/develop/background-work/services/fgs/timeout
 - Companion protocol: `mobile/README.md`; backend deployment: `docs/DEPLOYMENT_RUNBOOK.md`.
+
+## Capacitor wrapper update
+
+The current APK now bundles the web UI and native module into one app.
+Use docs/CAPACITOR_WRAPPER.md for setup/build instructions; the historical
+standalone companion/code-entry steps above apply only to version 0.2.x.

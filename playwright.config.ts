@@ -11,6 +11,10 @@ export default defineConfig({
   reporter: process.env.CI ? 'github' : 'list',
   use: {
     baseURL: e2eBaseUrl,
+    // The seeded family uses Asia/Ho_Chi_Minh. A 04:00 family session is
+    // 21:00 on the previous UTC date; the browser must use the same timezone
+    // rather than treating a valid session for today as yesterday on CI.
+    timezoneId: process.env.E2E_TIMEZONE ?? 'Asia/Ho_Chi_Minh',
     trace: 'on-first-retry',
   },
   projects: [

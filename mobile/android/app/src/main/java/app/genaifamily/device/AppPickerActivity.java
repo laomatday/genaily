@@ -18,6 +18,7 @@ public final class AppPickerActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        if (!NativeSetupPermit.consume()) { finish(); return; }
         setTitle("Ứng dụng giải trí");
 
         LinearLayout content = new LinearLayout(this);

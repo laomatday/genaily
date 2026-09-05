@@ -57,7 +57,7 @@ final class DevicePreferences {
 
     static void clearPairing(Context context) {
         SecureStore.clearToken(context);
-        preferences(context).edit().remove(DEVICE_ID).putBoolean(LOCKED, false).remove(UNLOCK_AFTER).apply();
+        preferences(context).edit().remove(DEVICE_ID).remove("bound_family").remove("bound_child").putBoolean(LOCKED, false).remove(UNLOCK_AFTER).apply();
     }
 
     private static SharedPreferences preferences(Context context) {

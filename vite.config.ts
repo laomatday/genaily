@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 import { APP_BRAND } from './src/config/brand.ts';
 import iconConfig from './assets/app-icons.config.json' with { type: 'json' };
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
   return {
     plugins: [
       {
@@ -15,7 +15,7 @@ export default defineConfig(() => {
         },
       },
       react(),
-      VitePWA({
+      ...(mode === 'native' ? [] : [VitePWA({
         registerType: 'autoUpdate',
         includeAssets: iconConfig.web.includeAssets,
         manifest: {
@@ -34,7 +34,7 @@ export default defineConfig(() => {
           enabled: process.env.VITE_PWA_DEV === 'true',
           type: 'module'
         }
-      })
+      })])
     ],
     resolve: {
       alias: {
@@ -49,6 +49,7 @@ export default defineConfig(() => {
       watch: process.env.DISABLE_HMR === 'true' ? null : {},
     },
     build: {
+      outDir: mode === 'native' ? 'dist-native' : 'dist',
       rolldownOptions: {
         output: {
           codeSplitting: {
@@ -69,7 +70,7 @@ export default defineConfig(() => {
       },
     },
     test: {
-      exclude: ['e2e/**', 'node_modules/**', 'dist/**'],
+      exclude: ['e2e/**', 'node_modules/**', 'dist/**', 'dist-native/**', 'mobile/**'],
     },
   };
 });
