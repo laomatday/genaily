@@ -6,6 +6,8 @@ import os
 from pathlib import Path
 import re
 import sys
+import socket
+import ssl
 from urllib import error, request
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -52,6 +54,17 @@ def call(url, key, body=None):
         response = request.build_opener(NoRedirect).open(req, timeout=20)
     except error.HTTPError as failure:
         response = failure
+    except error.URLError as failure:
+        reason = failure.reason
+        if isinstance(reason, socket.gaierror):
+            label = "DNS resolution failed"
+        elif isinstance(reason, ssl.SSLCertVerificationError):
+            label = "TLS certificate verification failed"
+        elif isinstance(reason, (TimeoutError, socket.timeout)):
+            label = "Connection timed out"
+        else:
+            label = "Connection failed (" + type(reason).__name__ + ")"
+        raise ValueError(label + "; production reachability is NOT verified") from None
     with response:
         status = response.code
         raw = response.read(256 * 1024 + 1)

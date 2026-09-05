@@ -12,6 +12,11 @@ Pull request chỉ chạy kiểm tra/build, không dùng signing secrets, không
 production và không phát hành APK. Các action được pin theo commit SHA;
 quyền workflow chỉ là `contents: read`.
 
+API probe là bắt buộc cho release. Với pilot phục vụ chẩn đoán, lỗi mạng/probe
+không chặn biên dịch APK; kết quả `failure` được giữ rõ trong job summary và
+`BUILD.txt`. Không coi một pilot build xanh là bằng chứng backend hoạt động.
+Cấu hình sai, unit test lỗi, lint lỗi hoặc APK không có chữ ký vẫn chặn mọi build.
+
 **Pilot kết nối dữ liệu production nhưng không phải bản release thương mại.**
 Pilot có application ID `app.genaifamily.device.pilot`, chữ Pilot trong ứng dụng,
 version tăng theo workflow run và được ký bằng debug certificate. Không cài cả

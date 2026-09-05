@@ -73,6 +73,9 @@ jobs:
       - name: Validate production configuration
         run: python3 scripts/check-android-production.py
       - name: Non-mutating production API smoke test
+        id: api_probe
+        # A diagnostics pilot remains buildable during an outage; a release must pass.
+        continue-on-error: ${{ inputs.channel != 'release' }}
         if: github.event_name != 'pull_request'
         run: python3 scripts/check-android-production.py --probe
       - name: Set up Java 17
@@ -123,6 +126,7 @@ jobs:
         shell: bash
         env:
           CHANNEL: ${{ inputs.channel || 'pilot' }}
+          API_PROBE: ${{ steps.api_probe.outcome }}
         run: |
           set -euo pipefail
           if [ "$CHANNEL" = release ]; then
@@ -137,10 +141,12 @@ jobs:
           (cd android-delivery && sha256sum "$APK" > SHA256SUMS.txt)
           printf 'Channel: %s\nBackend: production\nCommit: %s\nVersion: %s\n' \
             "$CHANNEL" "$GITHUB_SHA" "$GENAI_VERSION_NAME" > android-delivery/BUILD.txt
+          printf 'API probe: %s\n' "$API_PROBE" >> android-delivery/BUILD.txt
           cp docs/ANDROID_APK.md android-delivery/INSTALL.md
           {
             echo '## Android delivery'
             echo "- Channel: **$CHANNEL**; backend: **production**"
+            echo "- API probe: **$API_PROBE** (failure means backend reachability is NOT verified)"
             echo "- APK: \`$APK\`"
             echo '- Download the artifact below, unzip it, then install the APK on the child Android device.'
             echo '- Open Chẩn đoán kết nối → Kiểm tra API before entering a NEW Android pairing code.'
