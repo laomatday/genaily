@@ -1,4 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
 
 const deviceSetupStorageKeyPrefix = 'genai_family_device_setup_';
 
@@ -178,24 +179,46 @@ test.describe('production flows on a reset test account', () => {
     await secondPage.close();
   });
 
-  test('Study Lock runs from start through parent-approved unlock', async ({ page }) => {
+  test('Study Lock queues lock and creates unlock only after parent approval', async ({ page }) => {
+    const url = process.env.E2E_SUPABASE_URL;
+    const key = process.env.E2E_SUPABASE_SERVICE_ROLE_KEY;
+    if (!url || !key) throw new Error('Dedicated E2E backend credentials are required for command assertions.');
+    // Node test worker only: never pass this key into page.evaluate or browser code.
+    const database = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
     await openAccountMenu(page);
     await page.getByRole('button', { name: /Góc của bé/ }).click();
     const startButton = page.getByRole('button', { name: 'Bắt đầu buổi học' });
     await expect(startButton).toBeEnabled();
-    await startButton.click();
-
+    const [startResponse] = await Promise.all([
+      page.waitForResponse(response => response.url().endsWith('/rest/v1/rpc/start_learning_session') && response.request().method() === 'POST'),
+      startButton.click(),
+    ]);
+    expect(startResponse.ok()).toBe(true);
+    const sessionId = startResponse.request().postDataJSON().p_session_id as string;
+    expect(sessionId).toMatch(/^[0-9a-f-]{36}$/i);
+    const commands = async () => {
+      const { data, error } = await database.from('device_commands')
+        .select('command').eq('session_id', sessionId).order('created_at');
+      if (error) throw new Error(`E2E command read failed: ${error.code}`);
+      return data.map(row => row.command);
+    };
+    await expect.poll(commands).toEqual(['lock']);
     await expect(page.getByText('Study Lock', { exact: true }).first()).toBeVisible();
-    await page.getByRole('button', { name: 'Bắt đầu tập trung' }).click();
+    // CI has no native device/edge runtime. It must show a pending lock, not
+    // fabricate an acknowledgement just to display "Bắt đầu tập trung".
+    await expect(page.getByText('Thiết bị đã xác nhận khóa', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Bắt đầu trong khi chờ khóa', exact: true }).click();
     await page.getByRole('button', { name: /Hoàn thành & gửi ba\/mẹ duyệt/i }).click();
-    await page.getByRole('button', { name: 'Ổn' }).click();
+    await page.getByRole('button', { name: 'Ổn', exact: true }).click();
     await page.getByRole('button', { name: /Hoàn thành & Gửi Bố Mẹ duyệt/i }).click();
     await expect(page.getByRole('heading', { name: 'Đã gửi cho ba/mẹ.' })).toBeVisible();
+    expect(await commands()).toEqual(['lock']);
 
     await page.getByRole('button', { name: 'Mở trang ba/mẹ' }).click();
     await passParentGate(page);
     const approveButton = page.getByRole('button', { name: /Duyệt & thưởng/ });
     await approveButton.click();
     await expect(approveButton).toHaveCount(0);
+    await expect.poll(commands).toEqual(['lock', 'unlock']);
   });
 });
