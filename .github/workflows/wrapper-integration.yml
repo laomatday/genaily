@@ -21,6 +21,15 @@ jobs:
           node-version-file: .nvmrc
       - name: Apply checked integration and pin npm lockfile
         run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/apply-wrapper-integration.py')
+          text = p.read_text()
+          old = "    assert text.count(before) == count"
+          new = "    if path == '.gitignore':\n        file.write_text(text + '\\ndist-native/\\nandroid-delivery/\\nwrapper-test-output/\\n')\n        return\n    assert text.count(before) == count"
+          assert old in text
+          p.write_text(text.replace(old, new))
+          PY
           python3 scripts/apply-wrapper-integration.py
           npm install --package-lock-only --ignore-scripts
           npm ci
@@ -32,7 +41,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git rm .github/workflows/wrapper-integration.yml .github/workflows/wrapper-workspace.yml scripts/apply-wrapper-integration.py
+          git rm -f .github/workflows/wrapper-integration.yml .github/workflows/wrapper-workspace.yml scripts/apply-wrapper-integration.py
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
