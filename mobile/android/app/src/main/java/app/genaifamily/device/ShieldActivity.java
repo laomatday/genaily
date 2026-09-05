@@ -1,6 +1,5 @@
 package app.genaifamily.device;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Typeface;
 import android.os.Bundle;
@@ -11,8 +10,10 @@ import android.view.WindowManager;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
+import androidx.activity.ComponentActivity;
+import androidx.activity.OnBackPressedCallback;
 
-public final class ShieldActivity extends Activity {
+public final class ShieldActivity extends ComponentActivity {
     static final String EXTRA_APP_LABEL = "blocked_app_label";
     private final Handler handler = new Handler(Looper.getMainLooper());
     private final Runnable closeWhenUnlocked = new Runnable() {
@@ -30,6 +31,10 @@ public final class ShieldActivity extends Activity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
+        // Lifecycle-aware callback handles both legacy Back and Android 16 gestures.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override public void handleOnBackPressed() { goHome(); }
+        });
 
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
@@ -73,11 +78,6 @@ public final class ShieldActivity extends Activity {
     protected void onPause() {
         handler.removeCallbacks(closeWhenUnlocked);
         super.onPause();
-    }
-
-    @Override
-    public void onBackPressed() {
-        goHome();
     }
 
     private void goHome() {
