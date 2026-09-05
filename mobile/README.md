@@ -21,16 +21,20 @@ của mình qua RLS.
 
 ## Android
 
-Yêu cầu Android Studio/SDK 37, JDK 17 và Gradle 9.6.0. Copy
-`android/local.properties.example` thành `android/local.properties`, điền Android
-SDK, URL `device-agent` và Supabase publishable key rồi mở thư mục `android/`
-trong Android Studio.
+APK được build tự động qua **Actions → Android APK**. Cấu hình client production
+đã có trong `android/config/production.properties`; không cần tự điền endpoint
+khi cài APK. Xem [hướng dẫn APK và Diagnostics](../docs/ANDROID_APK.md) để tải bản
+pilot, ký release và kiểm thử ghép thiết bị.
+
+Build local dùng SDK 36, JDK 17, Gradle 8.13 và Android Gradle Plugin 8.13.2.
+Copy `android/local.properties.example` thành `android/local.properties` và
+chỉ điền `sdk.dir` theo máy phát triển. Không chép lại URL/key placeholder cũ.
 
 Sau khi cài lên máy trẻ:
 
-1. Ghép mã từ giao diện phụ huynh.
+1. Mở **Chẩn đoán kết nối → Kiểm tra API**, sau đó ghép mã Android mới từ phụ huynh.
 2. Mở **Cài đặt Trợ năng** và bật `Study Lock` sau khi đọc disclosure.
-3. Chọn từng ứng dụng giải trí/mạng xã hội cần chặn.
+3. Chọn từng ứng dụng giải trí/mạng xã hội cần chặn; kiểm tra heartbeat trong Diagnostics.
 
 Accessibility service chỉ nhận sự kiện đổi cửa sổ và tên package; cấu hình đặt
 `canRetrieveWindowContent=false`. Nếu phát hành trên Google Play, khai báo việc

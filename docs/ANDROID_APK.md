@@ -47,8 +47,10 @@ hoặc key là loại đặc quyền/JWT. Không sửa `local.properties.example
 đổi tên: đó không phải file Gradle đọc. Xóa các giá trị mẫu khỏi `local.properties`
 cũ để dùng cấu hình mặc định; giữ dòng `sdk.dir` theo máy phát triển.
 
-Toolchain giữ nguyên của dự án: Android Gradle Plugin 9.4.0, Gradle 9.6.0,
-JDK 17, compile/target SDK 37, build tools 36.0.0. CI cài Gradle tường minh;
+Toolchain được pin để tái lập build: Android Gradle Plugin 8.13.2, Gradle 8.13,
+JDK 17, compile/target SDK 36, build tools 36.0.0. SDK 37 khai báo ban đầu
+không có trên nguồn tải của runner trong lần kiểm tra ngày 05/09/2026;
+bộ công cụ được chuyển sang SDK 36, vẫn hỗ trợ toàn bộ API app đang dùng. CI cài Gradle tường minh;
 không giả định repo có `gradlew`. Local cần cài đúng Gradle rồi chạy:
 
 ```bash
@@ -121,6 +123,6 @@ cho phụ huynh; artifact chỉ dành cho người có quyền truy cập repo.
 ## Tài liệu đối chiếu
 
 - Supabase client API keys: https://supabase.com/docs/guides/api/api-keys
-- AGP 9.4.0 compatibility: https://developer.android.com/build/releases/agp-9-4-0-release-notes
+- AGP 8.13 compatibility: https://developer.android.com/build/releases/agp-8-13-0-release-notes
 - Android service timeout: https://developer.android.com/develop/background-work/services/fgs/timeout
 - Companion protocol: `mobile/README.md`; backend deployment: `docs/DEPLOYMENT_RUNBOOK.md`.

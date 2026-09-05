@@ -45,11 +45,11 @@ check(signing.values.all { it.isBlank() } || hasReleaseSigning) {
 
 android {
     namespace = "app.genaifamily.device"
-    compileSdk = 37
+    compileSdk = 36
     defaultConfig {
         applicationId = "app.genaifamily.device"
         minSdk = 26
-        targetSdk = 37
+        targetSdk = 36
         versionCode = buildNumber!!
         versionName = buildVersion
         buildConfigField("String", "DEVICE_AGENT_URL", "\"$agentUrl\"")

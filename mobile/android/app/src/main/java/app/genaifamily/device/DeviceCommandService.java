@@ -1,5 +1,8 @@
 package app.genaifamily.device;
 
+import android.Manifest;
+import android.content.pm.PackageManager;
+import android.os.Build;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -118,8 +121,11 @@ public final class DeviceCommandService extends Service {
                 }
             }
         }
-        if (!destroyed) getSystemService(NotificationManager.class).notify(
+        if (!destroyed && (Build.VERSION.SDK_INT < 33
+                || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED)) {
+            getSystemService(NotificationManager.class).notify(
                 NOTIFICATION_ID, notification(DevicePreferences.isLockActive(this)));
+        }
     }
     private void createNotificationChannel() {
         NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
