@@ -10,10 +10,8 @@ import android.content.Intent;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
-
 import org.json.JSONArray;
 import org.json.JSONObject;
-
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -26,85 +24,86 @@ public final class DeviceCommandService extends Service {
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean polling = new AtomicBoolean(false);
     private final Runnable pollTask = this::schedulePoll;
+    private volatile boolean destroyed;
 
     static void start(Context context) {
-        Intent intent = new Intent(context, DeviceCommandService.class);
-        try {
-            context.startForegroundService(intent);
-        } catch (RuntimeException ignored) {
-            // Recent Android versions may reject a foreground-service start from
-            // boot/background. The next foreground app launch starts it safely.
+        try { context.startForegroundService(new Intent(context, DeviceCommandService.class)); }
+        catch (RuntimeException error) {
+            DeviceDiagnostics.failure(context, "BACKGROUND: Android chưa cho chạy nền; mở lại companion app.");
         }
     }
-
-    @Override
-    public void onCreate() {
+    @Override public void onCreate() {
         super.onCreate();
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, notification(false));
         handler.post(pollTask);
     }
-
-    @Override
-    public int onStartCommand(Intent intent, int flags, int startId) {
+    @Override public int onStartCommand(Intent intent, int flags, int startId) {
         handler.removeCallbacks(pollTask);
         handler.post(pollTask);
         return START_STICKY;
     }
-
-    @Override
-    public void onDestroy() {
+    @Override public void onDestroy() {
+        destroyed = true;
         handler.removeCallbacks(pollTask);
         executor.shutdownNow();
         super.onDestroy();
     }
-
-    @Override
-    public IBinder onBind(Intent intent) {
-        return null;
+    @Override public void onTimeout(int startId, int fgsType) {
+        // Android 15+ limits dataSync foreground services. Fail open, never crash or strand a lock.
+        destroyed = true;
+        handler.removeCallbacks(pollTask);
+        DevicePreferences.setLock(this, false, 0L);
+        DeviceDiagnostics.failure(this, "BACKGROUND_TIMEOUT: Android đã dừng phiên nền; mở lại companion app.");
+        stopSelf();
     }
+    @Override public IBinder onBind(Intent intent) { return null; }
 
     private void schedulePoll() {
-        if (!polling.compareAndSet(false, true)) return;
+        if (destroyed || !polling.compareAndSet(false, true)) return;
         executor.execute(() -> {
-            try {
-                pollServer();
-            } catch (Exception ignored) {
+            try { pollServer(); }
+            catch (Exception error) {
+                DeviceDiagnostics.failure(this, DeviceApi.safeError(error));
+                if (error instanceof DeviceApi.ApiException
+                        && ((DeviceApi.ApiException) error).deviceUnauthorized) {
+                    // Only an explicit device-token rejection clears pairing; gateway/network errors do not.
+                    DevicePreferences.clearPairing(this);
+                    stopSelf();
+                }
                 DevicePreferences.isLockActive(this);
             } finally {
                 polling.set(false);
-                handler.postDelayed(pollTask, POLL_INTERVAL_MS);
+                if (!destroyed && SecureStore.readToken(this) != null) {
+                    handler.postDelayed(pollTask, POLL_INTERVAL_MS);
+                }
             }
         });
     }
 
     private void pollServer() throws Exception {
         String token = SecureStore.readToken(this);
-        if (token == null) {
-            stopSelf();
-            return;
-        }
+        if (token == null) { stopSelf(); return; }
         JSONObject response = DeviceApi.poll(token);
+        if (destroyed) return;
         int heartbeatSeconds = Math.max(30, Math.min(3600, response.optInt("heartbeat_timeout_seconds", 180)));
         JSONObject desired = response.optJSONObject("desired");
-        boolean shouldLock = desired != null && "lock".equals(desired.optString("state"));
+        if (desired == null || !("lock".equals(desired.optString("state"))
+                || "unlock".equals(desired.optString("state")))) {
+            throw new DeviceApi.ApiException(200, "PROTOCOL: trạng thái Study Lock không hợp lệ.", false);
+        }
+        DeviceDiagnostics.heartbeat(this, heartbeatSeconds);
+        boolean shouldLock = "lock".equals(desired.optString("state"));
         boolean canApplyLock = DevicePermissions.isAccessibilityEnabled(this)
                 && !DevicePreferences.blockedPackages(this).isEmpty();
         boolean applied = !shouldLock || canApplyLock;
-        String failure = canApplyLock || !shouldLock
-                ? null
-                : "Hãy bật quyền Study Lock và chọn ít nhất một ứng dụng cần chặn.";
-
+        String failure = applied ? null : "Hãy bật quyền Study Lock và chọn ít nhất một ứng dụng cần chặn.";
         if (shouldLock && applied) {
-            DevicePreferences.setLock(
-                    this,
-                    true,
-                    System.currentTimeMillis() + heartbeatSeconds * 1000L
-            );
-        } else if (!shouldLock) {
+            DevicePreferences.setLock(this, true, System.currentTimeMillis() + heartbeatSeconds * 1000L);
+        } else {
             DevicePreferences.setLock(this, false, 0L);
         }
-
+        if (failure != null) DeviceDiagnostics.failure(this, "PERMISSION: " + failure);
         JSONArray commands = response.optJSONArray("commands");
         if (commands != null) {
             for (int index = 0; index < commands.length(); index++) {
@@ -112,41 +111,29 @@ public final class DeviceCommandService extends Service {
                 if (command == null) continue;
                 String commandId = command.optString("id", "");
                 if (commandId.isEmpty()) continue;
-                try {
-                    DeviceApi.acknowledge(token, commandId, applied, failure);
-                } catch (Exception ignored) {
-                    // The server redelivers unacknowledged commands idempotently.
+                try { DeviceApi.acknowledge(token, commandId, applied, failure); }
+                catch (Exception error) {
+                    DeviceDiagnostics.failure(this, DeviceApi.safeError(error));
+                    // Unacknowledged commands remain eligible for server redelivery.
                 }
             }
         }
-        NotificationManager manager = getSystemService(NotificationManager.class);
-        manager.notify(NOTIFICATION_ID, notification(DevicePreferences.isLockActive(this)));
+        if (!destroyed) getSystemService(NotificationManager.class).notify(
+                NOTIFICATION_ID, notification(DevicePreferences.isLockActive(this)));
     }
-
     private void createNotificationChannel() {
-        NotificationChannel channel = new NotificationChannel(
-                CHANNEL_ID,
-                getString(R.string.notification_channel_name),
-                NotificationManager.IMPORTANCE_LOW
-        );
+        NotificationChannel channel = new NotificationChannel(CHANNEL_ID,
+                getString(R.string.notification_channel_name), NotificationManager.IMPORTANCE_LOW);
         channel.setDescription(getString(R.string.notification_description));
         getSystemService(NotificationManager.class).createNotificationChannel(channel);
     }
-
     private Notification notification(boolean locked) {
-        Intent openIntent = new Intent(this, MainActivity.class);
-        PendingIntent pendingIntent = PendingIntent.getActivity(
-                this,
-                0,
-                openIntent,
-                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT
-        );
+        PendingIntent intent = PendingIntent.getActivity(this, 0, new Intent(this, MainActivity.class),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         return new Notification.Builder(this, CHANNEL_ID)
                 .setSmallIcon(android.R.drawable.ic_lock_idle_lock)
                 .setContentTitle(locked ? "Study Lock đang bật" : getString(R.string.notification_title))
                 .setContentText(locked ? "Ứng dụng giải trí đã chọn đang được chặn" : getString(R.string.notification_description))
-                .setContentIntent(pendingIntent)
-                .setOngoing(true)
-                .build();
+                .setContentIntent(intent).setOngoing(true).build();
     }
 }

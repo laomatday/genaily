@@ -1,4 +1,7 @@
-# Copy to local.properties and fill from the web app's .env.local.
+# Copy to local.properties only to configure your local Android SDK.
+# Public production endpoint/key are already in config/production.properties.
+# Do not copy placeholder endpoint/key values into local.properties.
 sdk.dir=/absolute/path/to/Android/Sdk
-GENAI_DEVICE_AGENT_URL=https://PROJECT_REF.supabase.co/functions/v1/device-agent
-GENAI_PUBLISHABLE_KEY=sb_publishable_REPLACE_ME
+
+# Optional override for a rotated publishable key (never use service_role):
+# GENAI_PUBLISHABLE_KEY=your_new_publishable_key
