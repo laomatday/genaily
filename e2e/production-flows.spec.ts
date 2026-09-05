@@ -114,7 +114,7 @@ test.describe('production flows on a reset test account', () => {
 
   test('saving a learning schedule keeps Study Lock mandatory', async ({ page }) => {
     await page.getByRole('button', { name: 'Lịch', exact: true }).click();
-    await page.getByRole('button', { name: 'Thiết lập' }).click();
+    await page.getByRole('button', { name: 'Thiết lập', exact: true }).click();
     await page.getByRole('button', { name: 'Thêm hoạt động', exact: true }).click();
 
     const subjectDropdown = page.getByRole('button', { name: /^Môn học:/ });
