@@ -30,9 +30,9 @@ final class SecureStore {
         byte[] iv = cipher.getIV();
         ByteBuffer value = ByteBuffer.allocate(4 + iv.length + ciphertext.length);
         value.putInt(iv.length).put(iv).put(ciphertext);
-        preferences(context).edit()
+        if (!preferences(context).edit()
                 .putString(TOKEN_KEY, Base64.encodeToString(value.array(), Base64.NO_WRAP))
-                .apply();
+                .commit()) throw new java.io.IOException("Secure token persistence failed");
     }
 
     static String readToken(Context context) {

@@ -1,4 +1,7 @@
 import { Component, lazy, Suspense, useEffect, useMemo, useRef, useState, type ErrorInfo, type ReactNode } from 'react';
+import { isNativeAndroid } from './native/studyLock';
+import { NativeSetupScreen } from './native/NativeSetupScreen';
+import { NativeDevicePanel } from './native/NativeDevicePanel';
 import { AuthScreen } from './components/AuthScreen';
 import { ChildSelectionScreen } from './components/ChildSelectionScreen';
 import { EntryModeScreen } from './components/EntryModeScreen';
@@ -164,6 +167,7 @@ function ModeRecheckBarrier({
 function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
   const accountChildren = useAccountChildren(auth.user);
   const [childPickerOpen, setChildPickerOpen] = useState(false);
+  const [nativeSetupContext, setNativeSetupContext] = useState<FamilyContext | null>(null);
   // This component is keyed by account ID. Restore only that account's
   // context; the legacy unscoped key may contain another signed-in account.
   const [context, setContext] = useState<FamilyContext | null>(() => (
@@ -425,6 +429,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
 
   const handleSwitchToChild = async () => {
     if (!activeContext) return;
+    if (isNativeAndroid()) { setNativeSetupContext(activeContext); return; }
     setModeError(null);
     try {
       await enterChildMode(activeContext);
@@ -468,6 +473,7 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
     if (!authUserId) throw new Error('Phiên đăng nhập đã hết hạn.');
     const nextContext = contextFromAccountChild(child);
     if (!nextContext) throw new Error('Hồ sơ của bé không hợp lệ.');
+    if (isNativeAndroid()) { setNativeSetupContext(nextContext); return; }
     setModeError(null);
     const serverMode = await completeAppOnboarding('child', nextContext);
     if (serverMode.appMode !== 'child'
@@ -481,6 +487,23 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
     setEntryModeInitialStep('child');
     setRole('child');
     setOnboardingRequired(false);
+  };
+
+  const handleNativeSetupCompleted = async () => {
+    const selected = nativeSetupContext;
+    if (!selected || selected.parentProfileId !== authUserId) throw new Error('Hồ sơ thiết bị không hợp lệ.');
+    const serverMode = await completeAppOnboarding('child', selected);
+    if (serverMode.appMode !== 'child' || serverMode.familyId !== selected.familyId
+        || serverMode.childProfileId !== selected.childProfileId) {
+      throw new Error('Máy chủ chưa xác nhận đúng hồ sơ trẻ.');
+    }
+    handleChildSelected(selected);
+    persistDeviceSetup(authUserId, 'child');
+    persistMode('child');
+    setRole('child');
+    setEntryModeInitialStep('child');
+    setOnboardingRequired(false);
+    setNativeSetupContext(null);
   };
 
   const handleParentAccessRequested = () => {
@@ -548,6 +571,10 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
         inert={backgroundModeCheck ? true : undefined}
         aria-hidden={backgroundModeCheck ? true : undefined}
       >
+        {isNativeAndroid() && activeContext && !onboardingRequired && !nativeSetupContext ? (
+          <NativeDevicePanel context={activeContext} role={role}
+            onSetup={role === 'child' ? handleParentAccessRequested : () => setNativeSetupContext(activeContext)} />
+        ) : null}
         {content}
       </div>
       {backgroundModeCheck ? (
@@ -562,6 +589,15 @@ function AuthenticatedApp({ auth }: { auth: AuthenticatedAuthState }) {
 
   if (accountChildren.loading && (!activeContext || onboardingRequired)) {
     return preserveVerifiedScreen(<LoadingScreen label="Đang tải danh sách con…" />);
+  }
+
+  if (nativeSetupContext && isNativeAndroid()) {
+    return preserveVerifiedScreen(<NativeSetupScreen
+      context={nativeSetupContext}
+      childName={accountChildren.children.find(child => child.child_profile_id === nativeSetupContext.childProfileId)?.child_name ?? 'con'}
+      onComplete={handleNativeSetupCompleted}
+      onBack={() => setNativeSetupContext(null)}
+    />);
   }
 
   if (onboardingRequired) {

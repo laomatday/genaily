@@ -89,3 +89,9 @@ Script dùng Chromium của Playwright để rasterize logo ở đúng một l�
 `2/3`, sau đó encoder PNG dùng `node:zlib` tạo file deterministic. Metadata lưu
 SHA-256 của từng derivative để `npm run check:icons` phát hiện file bị sửa tay,
 scale lặp hoặc asset nguồn không còn nguyên vẹn.
+
+## Current Android wrapper
+
+Version 0.3.x uses Capacitor 8.5.0, Node 22, JDK 21 and Gradle 8.14.3.
+See ../docs/CAPACITOR_WRAPPER.md. Android 0.2.x standalone setup above is historical;
+iOS remains the existing separate native scaffold and is not converted in this increment.

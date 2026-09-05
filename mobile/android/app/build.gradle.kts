@@ -79,8 +79,8 @@ android {
     }
     buildFeatures { buildConfig = true }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
 }
 
@@ -96,6 +96,7 @@ tasks.register("verifyProductionConfiguration") {
 }
 
 dependencies {
-    implementation("androidx.activity:activity:1.10.1")
+    implementation(project(":capacitor-android"))
+    implementation("androidx.activity:activity:1.11.0")
     testImplementation("junit:junit:4.13.2")
 }

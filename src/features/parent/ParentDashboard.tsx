@@ -38,7 +38,7 @@ interface ParentDashboardProps {
   error: string | null;
   onApprove: (session: LearningSessionRow) => Promise<void>;
   onAddGoal: (subject: string, minutes: number) => Promise<void>;
-  onSaveSchedule: (items: ScheduleSetupItem[]) => Promise<void>;
+  onSaveSchedule: (items: ScheduleSetupItem[], expectedVersion: string) => Promise<void>;
   onGenerateWeek: () => Promise<void>;
   onApplyWeek: () => Promise<void>;
   onLoadMoreSessions: () => Promise<void>;

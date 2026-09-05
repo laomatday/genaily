@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['dist/**', 'dev-dist/**', 'node_modules/**', 'supabase/functions/**'] },
+  { ignores: ['dist/**', 'dist-native/**', 'mobile/android/app/src/main/assets/**', 'dev-dist/**', 'node_modules/**', 'supabase/functions/**'] },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,
   reactHooks.configs.flat.recommended,
