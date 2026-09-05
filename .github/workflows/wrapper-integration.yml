@@ -35,23 +35,30 @@ jobs:
           npm ci
           npm run typecheck
           npm run check:wrapper
-      - name: Persist generated sources only to the integration branch
+      - name: Persist generated application sources to integration branch
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
         run: |
           set -euo pipefail
-          git rm -f .github/workflows/wrapper-integration.yml .github/workflows/wrapper-workspace.yml scripts/apply-wrapper-integration.py
+          mkdir -p /tmp/wrapper-delivery
+          cp .github/workflows/android-apk.yml /tmp/wrapper-delivery/android-apk.yml
+          # The Actions token has content rights, not workflow-write rights.
+          # Workflow changes will be applied separately through the GitHub connector.
+          git restore .github/workflows
+          git rm -f scripts/apply-wrapper-integration.py
           git add -A
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           git commit -m 'feat(android): integrate Capacitor wrapper, parent-authorized setup and pinned dependencies'
+          git archive --format=zip -o /tmp/wrapper-delivery/genaily-wrapper-source.zip HEAD
           AUTH=$(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)
           git -c "http.https://github.com/.extraheader=AUTHORIZATION: basic $AUTH" push origin HEAD:refs/heads/feat/capacitor-unified-child-app
           echo "GENAI_BUILD_SHA=$(git rev-parse HEAD)" >> "$GITHUB_ENV"
           echo "GENAI_VERSION_NAME=0.3.${GITHUB_RUN_NUMBER}" >> "$GITHUB_ENV"
           echo "GENAI_VERSION_CODE=$((1000 + GITHUB_RUN_NUMBER))" >> "$GITHUB_ENV"
-          git archive --format=zip -o /tmp/genaily-wrapper-source.zip HEAD
+      - name: Audit dependencies
+        run: npm audit --json > /tmp/wrapper-delivery/npm-audit.json || test "$?" = 1
       - name: Web tests and packaged assets
         run: |
           npm test
@@ -92,7 +99,7 @@ jobs:
         with:
           name: wrapper-integration-reports
           path: |
-            /tmp/genaily-wrapper-source.zip
+            /tmp/wrapper-delivery/
             mobile/android/app/build/reports/
             mobile/android/app/build/test-results/
           if-no-files-found: ignore
