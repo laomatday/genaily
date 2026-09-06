@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { ScheduleList } from '../../../components/ScheduleList';
 import { StatusBadge } from '../../../components/DesignSystem';
 import { MaterialIcon } from '../../../components/MaterialIcon';
@@ -41,8 +42,41 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
     return subjects;
   }, new Map<string, number>())].sort((left, right) => right[1] - left[1]);
 
+  const [openDays, setOpenDays] = useState<Set<DayKey>>(() => {
+    const todayDateKey = formatLocalDateKey();
+    const todayIndex = days.findIndex((day) => formatLocalDateKey(day.date) === todayDateKey);
+    const selectedIndex = days.findIndex((day) => day.key === selectedDay);
+    const startIndex = todayIndex >= 0 ? todayIndex : Math.max(0, selectedIndex);
+    const initial = new Set<DayKey>();
+    const current = days[startIndex];
+    const next = days[startIndex + 1];
+    if (current) initial.add(current.key);
+    if (next) initial.add(next.key);
+    return initial;
+  });
+
+  const ensureDayOpen = (day: DayKey) => {
+    setOpenDays((current) => {
+      if (current.has(day)) return current;
+      const next = new Set(current);
+      next.add(day);
+      return next;
+    });
+  };
+
+  const toggleDay = (day: DayKey) => {
+    onSelectDay(day);
+    setOpenDays((current) => {
+      const next = new Set(current);
+      if (next.has(day)) next.delete(day);
+      else next.add(day);
+      return next;
+    });
+  };
+
   const scrollToDay = (day: DayKey) => {
     onSelectDay(day);
+    ensureDayOpen(day);
     window.requestAnimationFrame(() => {
       document.getElementById(`week-day-${day}`)?.scrollIntoView({
         behavior: 'smooth',
@@ -151,30 +185,43 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
               });
             const dayLoad = loads.find((load) => load.day === day.key);
             const isHeavy = dayLoad?.level === 'heavy';
+            const isOpen = openDays.has(day.key);
+            const contentId = `week-day-content-${day.key}`;
 
             return (
               <section
                 key={day.key}
                 id={`week-day-${day.key}`}
-                className={`week-day-section ${selectedDay === day.key ? 'is-selected-day' : ''}`}
+                className={`week-day-section ${selectedDay === day.key ? 'is-selected-day' : ''} ${isOpen ? 'is-open' : 'is-collapsed'}`}
                 aria-labelledby={`week-day-title-${day.key}`}
               >
-                <div className="section-heading-row week-day-heading">
-                  <div>
+                <button
+                  type="button"
+                  className="section-heading-row week-day-heading week-day-toggle"
+                  aria-expanded={isOpen}
+                  aria-controls={contentId}
+                  onClick={() => toggleDay(day.key)}
+                >
+                  <span className="week-day-heading-copy">
                     <span className="screen-eyebrow">{day.shortName} · {day.date.getDate()}/{day.date.getMonth() + 1}</span>
-                    <h3 id={`week-day-title-${day.key}`}>{day.longName}</h3>
-                  </div>
-                  <div className="week-day-heading-meta">
+                    <strong id={`week-day-title-${day.key}`} className="week-day-title">{day.longName}</strong>
+                  </span>
+                  <span className="week-day-heading-meta">
                     <span className="week-day-activity-count">{dayEvents.length} hoạt động</span>
                     {isHeavy ? <StatusBadge status="warning" label="Tải cao" /> : null}
-                  </div>
-                </div>
+                    <span className="week-day-toggle-icon"><MaterialIcon name={isOpen ? 'expand_less' : 'expand_more'} /></span>
+                  </span>
+                </button>
 
-                {dayEvents.length > 0 ? (
-                  <ScheduleList events={dayEvents} date={day.date} onEdit={onOpenSetup} />
-                ) : (
-                  <p className="empty-card">Chưa có hoạt động.</p>
-                )}
+                {isOpen ? (
+                  <div id={contentId} className="week-day-content">
+                    {dayEvents.length > 0 ? (
+                      <ScheduleList events={dayEvents} date={day.date} onEdit={onOpenSetup} />
+                    ) : (
+                      <p className="empty-card">Chưa có hoạt động.</p>
+                    )}
+                  </div>
+                ) : null}
               </section>
             );
           })}
