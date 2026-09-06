@@ -1,0 +1,255 @@
+/* genAi Family typography system.
+   One source of truth for font family, type scale, weights and line-height.
+   Loaded after the legacy/global stylesheet so semantic typography stays consistent. */
+
+:root,
+:host {
+  --font-sans:
+    "Google Sans", "Product Sans", Inter, ui-sans-serif, system-ui,
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --default-font-family: var(--font-sans);
+
+  /* Compact mobile-first type scale. */
+  --type-eyebrow-size: 0.625rem;      /* 10px */
+  --type-meta-size: 0.6875rem;        /* 11px */
+  --type-label-size: 0.75rem;         /* 12px */
+  --type-body-sm-size: 0.8125rem;     /* 13px */
+  --type-body-size: 0.875rem;         /* 14px */
+  --type-brand-size: 1rem;            /* 16px */
+  --type-section-size: 1.125rem;      /* 18px */
+  --type-title-size: 1.5rem;          /* 24px */
+  --type-display-size: 1.9375rem;     /* 31px */
+
+  --type-leading-tight: 1.2;
+  --type-leading-heading: 1.25;
+  --type-leading-body: 1.55;
+  --type-leading-meta: 1.35;
+
+  --type-weight-regular: 400;
+  --type-weight-medium: 500;
+  --type-weight-semibold: 600;
+  --type-weight-bold: 700;
+  --type-weight-extrabold: 800;
+
+  --type-tracking-display: -0.038em;
+  --type-tracking-heading: -0.02em;
+  --type-tracking-eyebrow: 0.078125rem; /* 1.25px */
+
+  /* Keep utility-based UI on the same scale. */
+  --text-xs: var(--type-meta-size);
+  --text-xs--line-height: var(--type-leading-meta);
+  --text-sm: var(--type-body-sm-size);
+  --text-sm--line-height: 1.45;
+  --text-base: var(--type-body-size);
+  --text-base--line-height: var(--type-leading-body);
+  --text-lg: var(--type-brand-size);
+  --text-lg--line-height: 1.35;
+  --text-xl: var(--type-section-size);
+  --text-xl--line-height: var(--type-leading-heading);
+  --text-2xl: var(--type-title-size);
+  --text-2xl--line-height: 1.15;
+  --text-3xl: var(--type-display-size);
+  --text-3xl--line-height: 1.05;
+}
+
+html,
+body,
+#root {
+  font-family: var(--font-sans);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-size: var(--type-body-size);
+  line-height: var(--type-leading-body);
+  font-weight: var(--type-weight-regular);
+}
+
+button,
+input,
+select,
+textarea,
+optgroup {
+  font-family: inherit;
+}
+
+small {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+}
+
+b,
+strong {
+  font-weight: var(--type-weight-bold);
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-family: var(--font-sans);
+  font-weight: var(--type-weight-bold);
+}
+
+/* Semantic hierarchy shared by parent, child and setup flows. */
+.screen-eyebrow {
+  font-size: var(--type-eyebrow-size);
+  line-height: 1.25;
+  font-weight: var(--type-weight-extrabold);
+  letter-spacing: var(--type-tracking-eyebrow);
+  text-transform: uppercase;
+}
+
+.screen-intro h1 {
+  font-size: clamp(var(--type-title-size), 6vw, var(--type-display-size));
+  line-height: 1.05;
+  font-weight: var(--type-weight-bold);
+  letter-spacing: var(--type-tracking-display);
+}
+
+.screen-intro p,
+.fixed-schedule-heading p,
+.week-overview-card > p,
+.current-session-card > p,
+.dashboard-section > p {
+  font-size: var(--type-body-size);
+  line-height: var(--type-leading-body);
+  font-weight: var(--type-weight-regular);
+}
+
+.section-heading-row h2,
+.fixed-schedule-heading h2 {
+  font-size: var(--type-section-size);
+  line-height: var(--type-leading-heading);
+  font-weight: var(--type-weight-bold);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.section-heading-row small,
+.section-count,
+.week-day-activity-count {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-semibold);
+}
+
+.daily-overview-heading b,
+.current-session-card h2,
+.approval-review-copy b,
+.subject-distribution-row b {
+  font-size: var(--type-brand-size);
+  line-height: 1.35;
+  font-weight: var(--type-weight-bold);
+  letter-spacing: -0.01em;
+}
+
+.subject-distribution-row strong,
+.weekly-summary-grid b,
+.daily-stat-grid b {
+  font-weight: var(--type-weight-bold);
+}
+
+.primary-action,
+.secondary-action,
+.compact-primary-button,
+.section-text-button,
+.add-activity-button,
+.mode-switch-action {
+  font-size: var(--type-body-sm-size);
+  line-height: 1.35;
+  font-weight: var(--type-weight-semibold);
+}
+
+.status-badge,
+.fixed-schedule-tag,
+.schedule-card-status {
+  font-size: var(--type-eyebrow-size);
+  line-height: 1.25;
+  font-weight: var(--type-weight-bold);
+  letter-spacing: 0.01em;
+}
+
+.schedule-time {
+  font-size: var(--type-label-size);
+  line-height: 1;
+  font-weight: var(--type-weight-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.schedule-card-title {
+  font-size: var(--type-body-size);
+  line-height: 1.35;
+  font-weight: var(--type-weight-bold);
+  letter-spacing: -0.008em;
+}
+
+.schedule-card-meta {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-medium);
+}
+
+/* Normalize the utility classes that appear throughout the existing JSX. */
+.text-xs {
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+}
+
+.text-sm {
+  font-size: var(--type-body-sm-size);
+  line-height: 1.45;
+}
+
+.text-base {
+  font-size: var(--type-body-size);
+  line-height: var(--type-leading-body);
+}
+
+.text-lg {
+  font-size: var(--type-brand-size);
+  line-height: 1.35;
+}
+
+.text-xl {
+  font-size: var(--type-section-size);
+  line-height: var(--type-leading-heading);
+}
+
+.text-2xl {
+  font-size: var(--type-title-size);
+  line-height: 1.15;
+}
+
+.text-3xl {
+  font-size: var(--type-display-size);
+  line-height: 1.05;
+}
+
+.font-medium {
+  font-weight: var(--type-weight-medium);
+}
+
+.font-semibold {
+  font-weight: var(--type-weight-semibold);
+}
+
+.font-bold {
+  font-weight: var(--type-weight-bold);
+}
+
+.font-extrabold,
+.font-black {
+  font-weight: var(--type-weight-extrabold);
+}
+
+@media (max-width: 390px) {
+  :root,
+  :host {
+    --type-display-size: 1.75rem; /* 28px on very narrow screens */
+  }
+}
