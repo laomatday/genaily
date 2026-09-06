@@ -6,6 +6,7 @@ import { completionPercent, durationBetweenMinutes, isLearningEvent } from '../.
 import { formatLocalDateKey, formatWeekRange, getWeekDays } from '../../../lib/date';
 import type { FamilyData } from '../../../lib/familyRepository';
 import type { DayKey } from '../../../types';
+import './WeekPanel.mobile.css';
 
 interface WeekPanelProps {
   data: FamilyData;
@@ -19,29 +20,8 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
   const childName = data.child.full_name || 'Bé';
   const days = getWeekDays();
   const weekDateKeys = new Set(days.map((day) => formatLocalDateKey(day.date)));
-  const selected = days.find((day) => day.key === selectedDay) ?? days[0];
-  const selectedDateKey = formatLocalDateKey(selected.date);
   const currentWeekOccurrences = data.occurrences.filter((item) => weekDateKeys.has(item.occurrence_date));
-  const selectedOccurrences = new Map(
-    currentWeekOccurrences
-      .filter((item) => item.occurrence_date === selectedDateKey && item.schedule_event_id)
-      .map((item) => [item.schedule_event_id, item]),
-  );
-  const events = data.schedule
-    .filter((event) => event.day_of_week === selectedDay)
-    .map((event) => {
-      const occurrence = selectedOccurrences.get(event.id);
-      return {
-        ...event,
-        status: occurrence?.status === 'completed'
-          ? 'completed' as const
-          : occurrence?.status === 'in_progress'
-            ? 'live' as const
-            : 'upcoming' as const,
-      };
-    });
   const loads = calculateDayLoads(data.schedule);
-  const selectedLoad = loads.find((load) => load.day === selectedDay);
   const learningMinutes = data.schedule
     .filter((event) => isLearningEvent(event.event_type))
     .reduce((sum, event) => sum + event.duration_minutes, 0);
@@ -61,6 +41,16 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
     return subjects;
   }, new Map<string, number>())].sort((left, right) => right[1] - left[1]);
 
+  const scrollToDay = (day: DayKey) => {
+    onSelectDay(day);
+    window.requestAnimationFrame(() => {
+      document.getElementById(`week-day-${day}`)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  };
+
   return (
     <section className="dashboard-panel">
       <header className="screen-intro screen-intro-with-action">
@@ -76,7 +66,7 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
 
       <article className="fixed-schedule-card">
         <span className="fixed-schedule-tag"><MaterialIcon name="tune" />Thói quen & Lịch trình</span>
-        <div className="fixed-schedule-heading"><div><h2>Lịch học cố định theo tuần</h2><p>Tính chỉnh khung giờ học tập yên tĩnh, giờ ngủ và các hoạt động sau giờ học.</p></div><span><MaterialIcon name="calendar_month" /></span></div>
+        <div className="fixed-schedule-heading"><div><h2>Lịch học cố định theo tuần</h2><p>Tinh chỉnh khung giờ học tập yên tĩnh, giờ ngủ và các hoạt động sau giờ học.</p></div><span><MaterialIcon name="calendar_month" /></span></div>
         <button type="button" className="primary-action" onClick={onOpenSetup}>Thiết lập thời khóa biểu <MaterialIcon name="arrow_forward" /></button>
       </article>
 
@@ -120,18 +110,16 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
 
       <section className="dashboard-section" aria-labelledby="weekly-timeline-title">
         <div className="section-heading-row">
-          <div><span className="screen-eyebrow">Dòng thời gian</span><h2 id="weekly-timeline-title">{selected.longName}</h2></div>
-          <StatusBadge
-            status={selectedLoad?.level === 'heavy' ? 'warning' : 'success'}
-            label={selectedLoad?.level === 'heavy' ? 'Tải cao' : selectedLoad?.level === 'mid' ? 'Vừa' : 'Nhẹ'}
-          />
+          <div><span className="screen-eyebrow">Dòng thời gian</span><h2 id="weekly-timeline-title">Lịch cả tuần</h2></div>
+          <span className="section-count">{data.schedule.length}</span>
         </div>
-        <div className="week-day-strip" aria-label="Chọn ngày trong tuần">
+
+        <div className="week-day-strip" aria-label="Đi nhanh đến ngày trong tuần">
           {days.map((day) => (
             <button
               key={day.key}
               type="button"
-              onClick={() => onSelectDay(day.key)}
+              onClick={() => scrollToDay(day.key)}
               aria-pressed={selectedDay === day.key}
               className={selectedDay === day.key ? 'is-selected' : ''}
             >
@@ -139,7 +127,58 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
             </button>
           ))}
         </div>
-        <ScheduleList events={events} date={selected.date} onEdit={onOpenSetup} />
+
+        <div className="week-all-days">
+          {days.map((day) => {
+            const dateKey = formatLocalDateKey(day.date);
+            const occurrenceMap = new Map(
+              currentWeekOccurrences
+                .filter((item) => item.occurrence_date === dateKey && item.schedule_event_id)
+                .map((item) => [item.schedule_event_id, item]),
+            );
+            const dayEvents = data.schedule
+              .filter((event) => event.day_of_week === day.key)
+              .map((event) => {
+                const occurrence = occurrenceMap.get(event.id);
+                return {
+                  ...event,
+                  status: occurrence?.status === 'completed'
+                    ? 'completed' as const
+                    : occurrence?.status === 'in_progress'
+                      ? 'live' as const
+                      : 'upcoming' as const,
+                };
+              });
+            const dayLoad = loads.find((load) => load.day === day.key);
+            const isHeavy = dayLoad?.level === 'heavy';
+
+            return (
+              <section
+                key={day.key}
+                id={`week-day-${day.key}`}
+                className={`week-day-section ${selectedDay === day.key ? 'is-selected-day' : ''}`}
+                aria-labelledby={`week-day-title-${day.key}`}
+              >
+                <div className="section-heading-row week-day-heading">
+                  <div>
+                    <span className="screen-eyebrow">{day.shortName} · {day.date.getDate()}/{day.date.getMonth() + 1}</span>
+                    <h3 id={`week-day-title-${day.key}`}>{day.longName}</h3>
+                  </div>
+                  <div className="week-day-heading-meta">
+                    <span className="week-day-activity-count">{dayEvents.length} hoạt động</span>
+                    {isHeavy ? <StatusBadge status="warning" label="Tải cao" /> : null}
+                  </div>
+                </div>
+
+                {dayEvents.length > 0 ? (
+                  <ScheduleList events={dayEvents} date={day.date} onEdit={onOpenSetup} />
+                ) : (
+                  <p className="empty-card">Chưa có hoạt động.</p>
+                )}
+              </section>
+            );
+          })}
+        </div>
       </section>
 
       <div className="week-sync-actions">
