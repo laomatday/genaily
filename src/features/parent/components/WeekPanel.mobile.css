@@ -1,6 +1,5 @@
 /* Mobile-first full-week schedule layout.
-   Kept separate from the global stylesheet so the weekly timeline can evolve
-   without adding more overrides to src/style.css. */
+   Typography uses the global genAi tokens from src/typography.css. */
 
 .week-all-days {
   display: flex;
@@ -40,15 +39,15 @@
 }
 
 .week-day-strip button b {
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 700;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-semibold);
 }
 
 .week-day-strip button span {
-  font-size: 15px;
-  line-height: 1.15;
-  font-weight: 800;
+  font-size: var(--type-brand-size);
+  line-height: var(--type-leading-tight);
+  font-weight: var(--type-weight-bold);
   color: var(--app-text, #101828);
 }
 
@@ -122,16 +121,11 @@
 
 .week-day-title {
   display: block;
-  font-size: 17px;
-  line-height: 1.2;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-size: var(--type-section-size);
+  line-height: var(--type-leading-heading);
+  font-weight: var(--type-weight-bold);
+  letter-spacing: var(--type-tracking-heading);
   color: var(--app-text, #101828);
-}
-
-.week-day-heading .screen-eyebrow {
-  font-size: 11px;
-  line-height: 1.2;
 }
 
 .week-day-heading-meta {
@@ -143,9 +137,9 @@
 }
 
 .week-day-activity-count {
-  font-size: 11px;
-  line-height: 1.2;
-  font-weight: 700;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-semibold);
   white-space: nowrap;
   color: var(--app-text-muted, #667085);
 }
@@ -201,9 +195,9 @@
   align-items: flex-start;
   justify-content: flex-end;
   padding-top: 15px;
-  font-size: 12px;
+  font-size: var(--type-label-size);
   line-height: 1;
-  font-weight: 700;
+  font-weight: var(--type-weight-bold);
   font-variant-numeric: tabular-nums;
   color: var(--app-text-muted, #667085);
 }
@@ -238,9 +232,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 14px;
-  line-height: 1.25;
-  font-weight: 750;
+  font-size: var(--type-body-size);
+  line-height: 1.35;
+  font-weight: var(--type-weight-bold);
+  letter-spacing: -0.008em;
 }
 
 .week-day-section .schedule-card-meta {
@@ -249,16 +244,17 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 11px;
-  line-height: 1.3;
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-medium);
   color: var(--app-text-muted, #667085);
 }
 
 .week-day-section .schedule-card-status {
   margin-left: 4px;
-  font-size: 10px;
-  line-height: 1.2;
-  font-weight: 700;
+  font-size: var(--type-eyebrow-size);
+  line-height: 1.25;
+  font-weight: var(--type-weight-bold);
   white-space: nowrap;
 }
 
@@ -270,7 +266,9 @@
   border: 1px dashed var(--app-border, #e4e7ec);
   border-radius: 16px;
   background: transparent;
-  font-size: 13px;
+  font-size: var(--type-body-sm-size);
+  line-height: 1.45;
+  font-weight: var(--type-weight-regular);
   color: var(--app-text-muted, #667085);
 }
 
@@ -300,20 +298,12 @@
     padding: 10px;
   }
 
-  .week-day-title {
-    font-size: 16px;
-  }
-
   .week-day-heading-meta {
     gap: 4px;
   }
 
   .week-day-heading-meta .status-badge {
     display: none;
-  }
-
-  .week-day-activity-count {
-    font-size: 10px;
   }
 
   .week-day-toggle-icon {
