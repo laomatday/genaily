@@ -2,6 +2,7 @@ import { ScheduleList } from '../../../components/ScheduleList';
 import { StatusBadge } from '../../../components/DesignSystem';
 import { MaterialIcon } from '../../../components/MaterialIcon';
 import { calculateDayLoads } from '../../../domain/plannerService';
+import { completionPercent, durationBetweenMinutes, isLearningEvent } from '../../../domain/progressMetrics';
 import { formatLocalDateKey, formatWeekRange, getWeekDays } from '../../../lib/date';
 import type { FamilyData } from '../../../lib/familyRepository';
 import type { DayKey } from '../../../types';
@@ -22,6 +23,30 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
   const todayDateKey = formatLocalDateKey();
   const loads = calculateDayLoads(data.schedule);
   const selectedLoad = loads.find((load) => load.day === selected.key);
+
+  const weekDateKeys = new Set(days.map((day) => formatLocalDateKey(day.date)));
+  const currentWeekOccurrences = data.occurrences.filter((item) => weekDateKeys.has(item.occurrence_date));
+  const completedOccurrences = currentWeekOccurrences.filter((item) => item.status === 'completed');
+  const completedMinutes = completedOccurrences.reduce(
+    (sum, item) => sum + durationBetweenMinutes(item.starts_at, item.ends_at),
+    0,
+  );
+  const weekTotal = Math.max(currentWeekOccurrences.length, data.schedule.length);
+  const weekProgress = completionPercent(completedOccurrences.length, weekTotal);
+  const learningMinutes = data.schedule
+    .filter((event) => isLearningEvent(event.event_type))
+    .reduce((sum, event) => sum + event.duration_minutes, 0);
+  const otherMinutes = data.schedule
+    .filter((event) => !isLearningEvent(event.event_type))
+    .reduce((sum, event) => sum + event.duration_minutes, 0);
+  const heavyDays = loads.filter((load) => load.level === 'heavy').length;
+  const subjectMinutes = [...data.schedule.reduce((subjects, event) => {
+    if (!isLearningEvent(event.event_type) || !event.subject) return subjects;
+    subjects.set(event.subject, (subjects.get(event.subject) ?? 0) + event.duration_minutes);
+    return subjects;
+  }, new Map<string, number>())]
+    .sort((left, right) => right[1] - left[1])
+    .slice(0, 4);
 
   const occurrenceMap = new Map(
     data.occurrences
@@ -98,9 +123,38 @@ export function WeekPanel({ data, selectedDay, onSelectDay, onOpenSetup, onRefre
         })}
       </div>
 
+      <section className="week-dashboard-compact" aria-label="Tổng quan lịch tuần">
+        <article className="week-dashboard-main">
+          <div className="week-dashboard-main-copy">
+            <span className="screen-eyebrow">Tổng quan tuần</span>
+            <strong>{weekProgress}%</strong>
+            <small>{completedOccurrences.length}/{weekTotal} hoạt động · {completedMinutes} phút đã ghi nhận</small>
+          </div>
+          <progress value={weekProgress} max={100} aria-label={`Tiến độ tuần ${weekProgress}%`} />
+        </article>
+
+        <div className="week-dashboard-stats">
+          <span><MaterialIcon name="school" /><b>{Math.round(learningMinutes / 6) / 10}h</b><small>Học tập</small></span>
+          <span><MaterialIcon name="weekend" /><b>{Math.round(otherMinutes / 6) / 10}h</b><small>Sinh hoạt</small></span>
+          <span><MaterialIcon name="warning" /><b>{heavyDays}</b><small>Tải cao</small></span>
+        </div>
+
+        {subjectMinutes.length > 0 ? (
+          <div className="week-subject-strip" aria-label="Phân bổ môn học nổi bật">
+            {subjectMinutes.map(([subject, minutes]) => (
+              <span key={subject} className="week-subject-chip">
+                <b>{subject}</b>
+                <small>{minutes}'</small>
+              </span>
+            ))}
+          </div>
+        ) : null}
+      </section>
+
       <section className="week-active-day" aria-labelledby="week-active-day-title">
         <header className="week-active-day-header">
           <div>
+            <span className="screen-eyebrow">Lịch đang xem</span>
             <h2 id="week-active-day-title">{selected.longName}</h2>
             <small>{selected.date.getDate()}/{selected.date.getMonth() + 1} · {events.length} hoạt động</small>
           </div>
