@@ -130,6 +130,144 @@
   transform: scale(0.96);
 }
 
+/* Restored dashboard information, compressed into one shallow block. */
+.week-dashboard-compact {
+  display: grid;
+  gap: 0.55rem;
+  padding: 0.72rem;
+  border: 1px solid var(--app-border);
+  border-radius: 0.95rem;
+  background: var(--app-surface);
+}
+
+.week-dashboard-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 4.8rem;
+  align-items: end;
+  gap: 0.75rem;
+}
+
+.week-dashboard-main-copy {
+  min-width: 0;
+}
+
+.week-dashboard-main-copy strong {
+  display: inline-block;
+  margin-top: 0.12rem;
+  color: var(--app-text);
+  font-size: var(--type-section-size);
+  line-height: var(--type-leading-heading);
+  font-weight: var(--type-weight-bold);
+  letter-spacing: var(--type-tracking-heading);
+}
+
+.week-dashboard-main-copy small {
+  display: block;
+  margin-top: 0.08rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--app-text-muted);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-medium);
+}
+
+.week-dashboard-main progress {
+  width: 100%;
+  height: 0.38rem;
+  accent-color: var(--app-primary);
+}
+
+.week-dashboard-stats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.38rem;
+}
+
+.week-dashboard-stats > span {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  grid-template-areas:
+    "icon value"
+    "icon label";
+  column-gap: 0.35rem;
+  align-items: center;
+  padding: 0.45rem 0.5rem;
+  border-radius: 0.7rem;
+  background: var(--app-surface-muted);
+}
+
+.week-dashboard-stats .material-symbol-icon {
+  grid-area: icon;
+  color: var(--app-primary);
+  font-size: 1rem;
+}
+
+.week-dashboard-stats b {
+  grid-area: value;
+  color: var(--app-text);
+  font-size: var(--type-body-sm-size);
+  line-height: 1.2;
+  font-weight: var(--type-weight-bold);
+}
+
+.week-dashboard-stats small {
+  grid-area: label;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--app-text-muted);
+  font-size: var(--type-eyebrow-size);
+  line-height: 1.2;
+  font-weight: var(--type-weight-medium);
+}
+
+.week-subject-strip {
+  display: flex;
+  gap: 0.38rem;
+  overflow-x: auto;
+  padding-bottom: 0.05rem;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+
+.week-subject-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.week-subject-chip {
+  flex: 0 0 auto;
+  max-width: 9.5rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.34rem 0.5rem;
+  border: 1px solid var(--app-border);
+  border-radius: 999px;
+  background: var(--app-background);
+}
+
+.week-subject-chip b {
+  max-width: 7.1rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--app-text);
+  font-size: var(--type-meta-size);
+  line-height: var(--type-leading-meta);
+  font-weight: var(--type-weight-semibold);
+}
+
+.week-subject-chip small {
+  flex: 0 0 auto;
+  color: var(--app-text-muted);
+  font-size: var(--type-eyebrow-size);
+  line-height: 1;
+  font-weight: var(--type-weight-medium);
+}
+
 .week-active-day {
   display: grid;
   gap: 0.55rem;
@@ -144,6 +282,7 @@
 }
 
 .week-active-day-header h2 {
+  margin-top: 0.08rem;
   color: var(--app-text);
   font-size: var(--type-section-size);
   line-height: var(--type-leading-heading);
@@ -271,6 +410,23 @@
     flex: 0 0 2.8rem;
   }
 
+  .week-dashboard-main {
+    grid-template-columns: minmax(0, 1fr) 4rem;
+  }
+
+  .week-dashboard-stats > span {
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "value"
+      "label";
+    justify-items: center;
+    text-align: center;
+  }
+
+  .week-dashboard-stats .material-symbol-icon {
+    display: none;
+  }
+
   .week-active-day .schedule-card {
     grid-template-columns: 1.6rem minmax(0, 1fr);
     min-height: 2.85rem;
@@ -294,6 +450,10 @@
 
   .week-day-strip {
     position: relative;
+  }
+
+  .week-dashboard-compact {
+    grid-template-columns: 1fr;
   }
 
   .week-active-day .schedule-row {
