@@ -130,7 +130,6 @@
   transform: scale(0.96);
 }
 
-/* Restored dashboard information, compressed into one shallow block. */
 .week-dashboard-compact {
   display: grid;
   gap: 0.55rem;
@@ -394,6 +393,56 @@
   font-size: var(--type-body-sm-size);
 }
 
+/* Mobile: keep only the three core metrics and reduce dashboard height. */
+@media (max-width: 767px) {
+  .week-compact-panel {
+    gap: 0.68rem;
+  }
+
+  .week-dashboard-compact {
+    gap: 0;
+    padding: 0.42rem;
+    border-radius: 0.82rem;
+  }
+
+  .week-dashboard-main,
+  .week-subject-strip {
+    display: none;
+  }
+
+  .week-dashboard-stats {
+    gap: 0.28rem;
+  }
+
+  .week-dashboard-stats > span {
+    min-height: 2.55rem;
+    grid-template-columns: 1fr;
+    grid-template-areas:
+      "value"
+      "label";
+    justify-items: center;
+    align-content: center;
+    row-gap: 0.08rem;
+    padding: 0.3rem 0.28rem;
+    text-align: center;
+    border-radius: 0.62rem;
+  }
+
+  .week-dashboard-stats .material-symbol-icon {
+    display: none;
+  }
+
+  .week-dashboard-stats b {
+    font-size: var(--type-body-sm-size);
+    line-height: 1.1;
+  }
+
+  .week-dashboard-stats small {
+    font-size: var(--type-eyebrow-size);
+    line-height: 1.1;
+  }
+}
+
 @media (max-width: 390px) {
   .week-day-strip {
     display: flex;
@@ -408,23 +457,6 @@
 
   .week-day-strip button {
     flex: 0 0 2.8rem;
-  }
-
-  .week-dashboard-main {
-    grid-template-columns: minmax(0, 1fr) 4rem;
-  }
-
-  .week-dashboard-stats > span {
-    grid-template-columns: 1fr;
-    grid-template-areas:
-      "value"
-      "label";
-    justify-items: center;
-    text-align: center;
-  }
-
-  .week-dashboard-stats .material-symbol-icon {
-    display: none;
   }
 
   .week-active-day .schedule-card {
